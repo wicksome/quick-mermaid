@@ -14,22 +14,24 @@
   #toolbar {
     position: fixed; top: 0; left: 0; right: 0; height: 44px;
     display: flex; align-items: center; gap: 8px;
-    /* left padding reserves space for the macOS traffic-light buttons */
-    padding: 0 12px 0 84px;
+    padding: 0 12px;
     background: rgba(245,245,247,0.92);
     border-bottom: 1px solid #e3e3e6;
     backdrop-filter: saturate(180%) blur(20px);
-    -webkit-app-region: drag;
     z-index: 10;
   }
-  #toolbar > * { -webkit-app-region: no-drag; }
   #toolbar button {
-    font-size: 12px; height: 24px; width: 28px;
+    height: 26px; width: 30px; padding: 0;
     border: 1px solid #d2d2d7; border-radius: 6px;
     background: #fff; color: #1d1d1f; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
   }
-  #toolbar button.text { width: auto; padding: 0 10px; }
+  #toolbar button svg { width: 15px; height: 15px; display: block; }
+  #toolbar button:hover { background: #f0f0f3; }
   #toolbar button.on { background: #007aff; color: #fff; border-color: #007aff; }
+  #toolbar button.done { background: #30d158; color: #fff; border-color: #30d158; }
+  #toolbar button:disabled { opacity: 0.32; cursor: default; }
+  #toolbar button:disabled:hover { background: #fff; }
   #zoomLabel { font-size: 12px; color: #6e6e73; min-width: 42px; text-align: center; }
   .spacer { flex: 1; }
 
@@ -79,6 +81,42 @@
   #source .op { color: #0b7285; }                       /* arrow/operator */
   #source .c  { color: #6e7781; font-style: italic; }   /* comment */
 
+  /* history overlay */
+  #history {
+    display: none; position: absolute; inset: 44px 0 0 0;
+    background: #fbfbfd; overflow: auto;
+  }
+  body.preview #history { inset: 0; }
+  #history .empty { color: #8a8a8e; font-size: 13px; padding: 24px; text-align: center; }
+  #history .ghdr {
+    position: sticky; top: 0; z-index: 1;
+    padding: 8px 16px 4px; font-size: 11px; font-weight: 600;
+    color: #8a8a8e; text-transform: uppercase; letter-spacing: 0.04em;
+    background: #fbfbfd;
+  }
+  #history .item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 10px 9px 16px; border-bottom: 1px solid #ececef; cursor: pointer;
+  }
+  #history .item:hover { background: #eef1f5; }
+  #history .item .meta { flex: 1; min-width: 0; }
+  #history .item .t {
+    font-size: 13px; font-weight: 600; color: #1d1d1f;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #history .item .src {
+    margin-top: 3px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px; color: #8a8a8e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #history .item .del {
+    flex: none; width: 28px; height: 28px; padding: 0;
+    border: none; background: none; color: #b0b0b5; cursor: pointer;
+    display: none; align-items: center; justify-content: center; border-radius: 6px;
+  }
+  #history .item .del svg { width: 15px; height: 15px; }
+  #history .item:hover .del { display: inline-flex; }
+  #history .item .del:hover { background: #e3e3e6; color: #d11; }
+
   /* toast (copy/save feedback) */
   #toast {
     position: fixed; left: 50%; top: 50%;
@@ -104,14 +142,15 @@
 </head>
 <body>
   <div id="toolbar">
-    <button id="zoomOut" title="축소 (⌘−)">−</button>
+    <button id="zoomOut" title="Zoom out (⌘−)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     <span id="zoomLabel">100%</span>
-    <button id="zoomIn" title="확대 (⌘+)">+</button>
-    <button id="zoomReset" class="text" title="원래대로 (⌘0)">리셋</button>
+    <button id="zoomIn" title="Zoom in (⌘+)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+    <button id="zoomReset" title="Reset (⌘0)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></button>
     <span class="spacer"></span>
-    <button id="srcBtn" class="text" title="선택한 텍스트(소스) 보기">&lt;/&gt; 소스</button>
-    <button id="saveBtn" class="text" title="PNG 파일로 저장 (⌘S)">Save PNG</button>
-    <button id="copyBtn" class="text" title="이미지 복사 (⌘C)">Copy PNG</button>
+    <button id="histBtn" title="Recent diagrams"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></button>
+    <button id="srcBtn" title="Show source text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
+    <button id="saveBtn" title="Save as PNG (⌘S)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+    <button id="copyBtn" title="Copy image (⌘C)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
   </div>
 
   <div id="stage">
@@ -127,6 +166,8 @@
 
   <div id="source"><pre><code id="srcCode"></code></pre></div>
 
+  <div id="history"></div>
+
   <div id="toast"><span class="ic">✓</span><span class="tx"></span></div>
 
   <script>
@@ -134,20 +175,28 @@
     var currentTheme = "default";
     var currentBg = "#ffffff";
     var scale = 1, panX = 0, panY = 0;
+    var baseZoom = 1;   // multiplier applied on top of fit-to-window (from default zoom setting)
     var sourceOpen = false;
+    var historyOpen = false;
+    var rendered = false;    // true only when a diagram is currently shown (not empty/error state)
+    var renderSeq = 0;       // unique mermaid render id counter (avoids id collisions on rapid renders)
+    var historyItems = [];   // recent diagram sources (most recent first), injected by Swift
 
     if (location.hash.indexOf('preview') !== -1) document.body.classList.add('preview');
 
     // ── i18n (use "ko" when system language is Korean, otherwise "en") ──
     var I18N = {
       ko: {
-        reset: '리셋', source: '</> 소스', save: 'Save PNG', copy: 'Copy PNG',
+        reset: '초기화', source: '</> 소스', save: '이미지 저장', copy: '이미지 복사',
         emptyTitle: '표시할 다이어그램이 없어요', emptySub: '먼저 mermaid 텍스트를 선택(또는 복사)한 뒤 다시 시도하세요.',
         errTitle: '다이어그램을 그릴 수 없어요', errSub: 'mermaid 문법 오류로 보입니다. 상단 “소스” 버튼으로 원문을 확인하세요.',
         loadFail: 'mermaid.js 로드 실패', loadFailSub: 'mermaid.min.js 를 찾지 못했습니다.',
         copied: '복사됨', saved: '저장됨', copyDone: '✓ 복사됨',
-        tipZoomOut: '축소 (⌘−)', tipZoomIn: '확대 (⌘+)', tipReset: '원래대로 (⌘0)',
-        tipSource: '선택한 텍스트(소스) 보기', tipSave: 'PNG 파일로 저장 (⌘S)', tipCopy: '이미지 복사 (⌘C)'
+        tipZoomOut: '축소 (⌘−)', tipZoomIn: '확대 (⌘+)', tipReset: '맞춤 (⌘0)',
+        tipHistory: '최근 다이어그램', tipSource: '소스 보기',
+        tipSave: '이미지 저장 (⌘S)', tipCopy: '이미지 복사 (⌘C)',
+        histEmpty: '최근 다이어그램이 없어요',
+        today: '오늘', yesterday: '어제', delete: '삭제'
       },
       en: {
         reset: 'Reset', source: '</> Source', save: 'Save PNG', copy: 'Copy PNG',
@@ -155,23 +204,34 @@
         errTitle: 'Could not render the diagram', errSub: 'Looks like a mermaid syntax error. Use the “Source” button above to inspect.',
         loadFail: 'Failed to load mermaid.js', loadFailSub: 'mermaid.min.js was not found.',
         copied: 'Copied', saved: 'Saved', copyDone: '✓ Copied',
-        tipZoomOut: 'Zoom out (⌘−)', tipZoomIn: 'Zoom in (⌘+)', tipReset: 'Reset (⌘0)',
-        tipSource: 'Show source text', tipSave: 'Save as PNG (⌘S)', tipCopy: 'Copy image (⌘C)'
+        tipZoomOut: 'Zoom out (⌘−)', tipZoomIn: 'Zoom in (⌘+)', tipReset: 'Fit (⌘0)',
+        tipHistory: 'Recent diagrams', tipSource: 'Show source',
+        tipSave: 'Save image (⌘S)', tipCopy: 'Copy image (⌘C)',
+        histEmpty: 'No recent diagrams',
+        today: 'Today', yesterday: 'Yesterday', delete: 'Delete'
       }
     };
-    var L = I18N[((navigator.language || 'en').slice(0, 2) === 'ko') ? 'ko' : 'en'];
-    function applyI18n() {
+    function pickLang(lang) {
+      var l = lang || navigator.language || 'en';
+      return l.slice(0, 2) === 'ko' ? 'ko' : 'en';
+    }
+    var L = I18N[pickLang(null)];
+    function applyI18n(lang) {
+      L = I18N[pickLang(lang)];
       var $ = function (id) { return document.getElementById(id); };
+      // icon buttons: localize tooltips only
       $('zoomOut').title = L.tipZoomOut;
       $('zoomIn').title = L.tipZoomIn;
-      $('zoomReset').textContent = L.reset; $('zoomReset').title = L.tipReset;
-      $('srcBtn').textContent = L.source; $('srcBtn').title = L.tipSource;
-      $('saveBtn').textContent = L.save; $('saveBtn').title = L.tipSave;
-      $('copyBtn').textContent = L.copy; $('copyBtn').title = L.tipCopy;
+      $('zoomReset').title = L.tipReset;
+      $('histBtn').title = L.tipHistory;
+      $('srcBtn').title = L.tipSource;
+      $('saveBtn').title = L.tipSave;
+      $('copyBtn').title = L.tipCopy;
+      if (historyOpen) renderHistory();
     }
 
     function post(ok, info) {
-      try { window.webkit.messageHandlers.result.postMessage({ ok: ok, info: String(info) }); } catch (e) {}
+      try { window.webkit.messageHandlers.result.postMessage({ ok: ok, info: String(info), code: lastCode }); } catch (e) {}
     }
 
     function applyTransform() {
@@ -196,10 +256,22 @@
       panY = (ch * scale <= sh) ? (sh - ch * scale) / 2 : 16;
       applyTransform();
     }
-    function resetView() { scale = 1; centerContent(); }
+    // Scale so the diagram fits the stage (so it opens at a readable size, not tiny).
+    // Upscaling is capped to avoid blowing up trivially small diagrams.
+    function fitScale() {
+      var stage = document.getElementById('stage');
+      var content = document.getElementById('content');
+      var sw = stage.clientWidth, sh = stage.clientHeight;
+      var cw = content.offsetWidth, ch = content.offsetHeight;
+      if (cw < 1 || ch < 1) return 1;
+      var s = Math.min(sw / cw, sh / ch);
+      return Math.max(0.1, Math.min(s, 2.5));
+    }
+    function resetView() { scale = fitScale() * baseZoom; centerContent(); }
 
     // empty/error state view (we render this instead of mermaid's default error screen)
     function showState(glyph, title, subtitle, detail) {
+      rendered = false;                          // no diagram → export disabled
       document.getElementById('diagram').innerHTML = '';
       document.getElementById('stage').style.display = 'none';
       var s = document.getElementById('state');
@@ -210,6 +282,7 @@
       var d = s.querySelector('.detail');
       if (detail) { d.style.display = 'block'; d.textContent = detail; }
       else { d.style.display = 'none'; }
+      if (typeof updateExportButtons === 'function') updateExportButtons();
     }
     function hideState() {
       document.getElementById('state').style.display = 'none';
@@ -218,7 +291,7 @@
 
     // clean up temporary/error nodes mermaid left in body (keep only #toolbar/#stage/#state/#source)
     function cleanupOrphans() {
-      var keep = { 'toolbar': 1, 'stage': 1, 'state': 1, 'source': 1 };
+      var keep = { 'toolbar': 1, 'stage': 1, 'state': 1, 'source': 1, 'history': 1, 'toast': 1 };
       Array.prototype.slice.call(document.body.children).forEach(function (el) {
         if (el.tagName === 'SCRIPT') return;
         if (!keep[el.id]) el.parentNode.removeChild(el);
@@ -236,11 +309,14 @@
       }
       try {
         mermaid.initialize({ startOnLoad: false, theme: currentTheme, suppressErrorRendering: true, maxTextSize: 900000, maxEdges: 2000 });
-        var out = await mermaid.render('g' + Date.now(), lastCode);
+        var out = await mermaid.render('g' + (++renderSeq) + '_' + Date.now(), lastCode);
         hideState();
         document.getElementById('diagram').innerHTML = out.svg;
         cleanupOrphans();
+        scale = fitScale() * baseZoom;   // open at a size that fits the render window
         centerContent();
+        rendered = true;
+        if (typeof updateExportButtons === 'function') updateExportButtons();
         post(true, 'svg length=' + out.svg.length);
       } catch (e) {
         cleanupOrphans();
@@ -291,19 +367,108 @@
     }
     function toggleSource() {
       sourceOpen = !sourceOpen;
+      if (sourceOpen) closeHistory();
       document.getElementById('source').style.display = sourceOpen ? 'block' : 'none';
       document.getElementById('srcBtn').classList.toggle('on', sourceOpen);
       if (sourceOpen) renderSource();
+      updateExportButtons();
+    }
+
+    // ── History ──
+    window.setHistory = function (arr) {
+      historyItems = Array.isArray(arr) ? arr : [];
+      if (historyOpen) renderHistory();
+    };
+    function firstLine(code) {
+      var lines = (code || '').split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        var t = lines[i].trim();
+        if (t) return t;
+      }
+      return '(empty)';
+    }
+    function itemCode(it) { return (it && typeof it === 'object') ? (it.code || '') : (it || ''); }
+    function dateKey(ts) {
+      var d = ts ? new Date(ts * 1000) : new Date();
+      return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+    }
+    function dateLabel(ts) {
+      var d = ts ? new Date(ts * 1000) : new Date();
+      var now = new Date();
+      var today = dateKey(now.getTime() / 1000);
+      var y = new Date(now.getTime() - 86400000);
+      if (dateKey(ts) === today) return L.today;
+      if (dateKey(ts) === dateKey(y.getTime() / 1000)) return L.yesterday;
+      var mm = ('0' + (d.getMonth() + 1)).slice(-2), dd = ('0' + d.getDate()).slice(-2);
+      return d.getFullYear() + '-' + mm + '-' + dd;
+    }
+    function renderHistory() {
+      var el = document.getElementById('history');
+      if (!historyItems.length) {
+        el.innerHTML = '<div class="empty">' + escapeHtml(L.histEmpty) + '</div>';
+        return;
+      }
+      var html = '', lastKey = null;
+      for (var i = 0; i < historyItems.length; i++) {
+        var it = historyItems[i], code = itemCode(it), ts = (it && it.ts) || 0;
+        var k = dateKey(ts);
+        if (k !== lastKey) { html += '<div class="ghdr">' + escapeHtml(dateLabel(ts)) + '</div>'; lastKey = k; }
+        var oneLine = code.replace(/\s+/g, ' ').trim();
+        html += '<div class="item" data-i="' + i + '">'
+              + '<div class="meta"><div class="t">' + escapeHtml(firstLine(code)) + '</div>'
+              + '<div class="src">' + escapeHtml(oneLine) + '</div></div>'
+              + '<button class="del" data-i="' + i + '" title="' + escapeHtml(L.delete) + '">'
+              + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
+              + '</button></div>';
+      }
+      el.innerHTML = html;
+      Array.prototype.forEach.call(el.querySelectorAll('.item'), function (node) {
+        node.onclick = function () { loadFromHistory(parseInt(node.getAttribute('data-i'), 10)); };
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('.del'), function (btn) {
+        btn.onclick = function (ev) { ev.stopPropagation(); deleteHistory(parseInt(btn.getAttribute('data-i'), 10)); };
+      });
+    }
+    function deleteHistory(i) {
+      if (i < 0 || i >= historyItems.length) return;
+      var code = itemCode(historyItems[i]);
+      historyItems.splice(i, 1);   // instant local removal
+      renderHistory();
+      try { window.webkit.messageHandlers.deleteHistory.postMessage(code); } catch (e) {}  // persist
+    }
+    function closeHistory() {
+      historyOpen = false;
+      document.getElementById('history').style.display = 'none';
+      document.getElementById('histBtn').classList.remove('on');
+      updateExportButtons();
+    }
+    function toggleHistory() {
+      historyOpen = !historyOpen;
+      if (historyOpen) { sourceOpen = false; document.getElementById('source').style.display = 'none'; document.getElementById('srcBtn').classList.remove('on'); }
+      document.getElementById('history').style.display = historyOpen ? 'block' : 'none';
+      document.getElementById('histBtn').classList.toggle('on', historyOpen);
+      if (historyOpen) renderHistory();
+      updateExportButtons();
+    }
+    function loadFromHistory(i) {
+      if (i < 0 || i >= historyItems.length) return;
+      lastCode = itemCode(historyItems[i]);
+      closeHistory();
+      if (sourceOpen) renderSource();
+      doRender();
     }
 
     // Swift entry point
-    window.render = function (code, theme, zoomPercent, bg) {
+    window.render = function (code, theme, zoomPercent, bg, lang) {
       lastCode = code || "";
       currentTheme = theme || "default";
       applyBackground(bg);
-      scale = (zoomPercent && zoomPercent > 0) ? (zoomPercent / 100) : 1;
-      applyTransform();
-      if (sourceOpen) renderSource();
+      applyI18n(lang);
+      // A fresh render always shows the diagram view — close any open overlay.
+      if (sourceOpen) toggleSource();
+      if (historyOpen) closeHistory();
+      // default-zoom setting becomes a multiplier on the fit-to-window scale (computed in doRender)
+      baseZoom = (zoomPercent && zoomPercent > 0) ? (zoomPercent / 100) : 1;
       doRender();
     };
 
@@ -312,9 +477,18 @@
     document.getElementById('zoomOut').onclick = function () { setScale(scale / 1.2); };
     document.getElementById('zoomReset').onclick = resetView;
     document.getElementById('srcBtn').onclick = toggleSource;
+    document.getElementById('histBtn').onclick = toggleHistory;
+    // Copy/Save act on the rendered diagram. Disable them while an overlay (source/history)
+    // hides the diagram — exporting something you can't see is unpredictable.
+    function exportBlocked() { return sourceOpen || historyOpen || !rendered; }
+    function updateExportButtons() {
+      var dis = exportBlocked();
+      document.getElementById('copyBtn').disabled = dis;
+      document.getElementById('saveBtn').disabled = dis;
+    }
     // Actual copy/save completion is signaled by Swift via callbacks (window.copied/saved) — no optimistic display
-    function doCopy() { try { window.webkit.messageHandlers.copyPNG.postMessage({}); } catch (e) {} }
-    function doSave() { try { window.webkit.messageHandlers.savePNG.postMessage({}); } catch (e) {} }
+    function doCopy() { if (exportBlocked()) return; try { window.webkit.messageHandlers.copyPNG.postMessage({}); } catch (e) {} }
+    function doSave() { if (exportBlocked()) return; try { window.webkit.messageHandlers.savePNG.postMessage({}); } catch (e) {} }
     document.getElementById('copyBtn').onclick = doCopy;
     document.getElementById('saveBtn').onclick = doSave;
 
@@ -326,16 +500,90 @@
       clearTimeout(toastTimer);
       toastTimer = setTimeout(function () { t.classList.remove('show'); }, 1100);
     }
-    function flashButton(id, label) {
-      var b = document.getElementById(id), prev = b.textContent;
-      b.classList.add('done'); b.textContent = label;
-      setTimeout(function () { b.classList.remove('done'); b.textContent = prev; }, 1200);
+    function flashButton(id) {
+      var b = document.getElementById(id);
+      b.classList.add('done');
+      setTimeout(function () { b.classList.remove('done'); }, 1200);
     }
     // Swift completion callbacks
-    window.copied = function () { flashButton('copyBtn', L.copyDone); showToast(L.copied); };
+    window.copied = function () { flashButton('copyBtn'); showToast(L.copied); };
     window.saved  = function () { showToast(L.saved); };
 
     applyI18n();
+
+    // ── In-app test harness (run via `QuickMermaid --test`) ──
+    window.__test = async function () {
+      var R = [];
+      function ok(name, cond) { R.push({ name: name, pass: !!cond }); }
+      var $ = function (id) { return document.getElementById(id); };
+      var stage = 'start';
+      try {
+      // render a valid diagram
+      lastCode = 'graph TD\n  A-->B'; currentTheme = 'default';
+      await doRender();
+      ok('render.valid.svg', $('diagram').querySelectorAll('svg').length === 1);
+      ok('render.valid.noState', $('state').style.display !== 'flex');
+      ok('render.valid.fitScale', scale > 0);
+
+      // invalid → error state + export disabled
+      lastCode = '%%nope%%\n@@@@'; await doRender();
+      ok('render.invalid.state', $('state').style.display === 'flex');
+      ok('export.disabled.failure', $('copyBtn').disabled === true && $('saveBtn').disabled === true);
+
+      // empty → empty state
+      lastCode = '   '; await doRender();
+      ok('render.empty.state', $('state').style.display === 'flex');
+
+      // a fresh valid render re-enables export
+      lastCode = 'graph TD\n  A-->B'; await doRender();
+      ok('export.enabled.afterRender', $('copyBtn').disabled === false);
+
+      // source overlay toggles + shows highlighted code
+      lastCode = 'graph TD\n  A-->B'; await doRender();
+      toggleSource();
+      ok('source.opens', $('source').style.display === 'block' && $('srcCode').innerHTML.length > 0);
+      toggleSource();
+      ok('source.closes', $('source').style.display === 'none');
+
+      // export buttons disabled while source overlay open, re-enabled on close
+      toggleSource();
+      ok('export.disabled.source', $('copyBtn').disabled === true && $('saveBtn').disabled === true);
+      toggleSource();
+      ok('export.enabled.afterSource', $('copyBtn').disabled === false && $('saveBtn').disabled === false);
+
+      // history: objects {code, ts}, date group headers, open/load/delete
+      var nowS = Date.now() / 1000;
+      setHistory([
+        { code: 'graph TD\n  X-->Y', ts: nowS },
+        { code: 'sequenceDiagram\n  A->>B: hi', ts: nowS - 2 * 86400 }
+      ]);
+      toggleHistory();
+      ok('history.opens', $('history').style.display === 'block');
+      ok('history.lists', $('history').querySelectorAll('.item').length === 2);
+      ok('history.groupHeaders', $('history').querySelectorAll('.ghdr').length === 2);
+      ok('export.disabled.history', $('copyBtn').disabled === true && $('saveBtn').disabled === true);
+      deleteHistory(1);
+      ok('history.delete', $('history').querySelectorAll('.item').length === 1);
+      loadFromHistory(0);
+      await new Promise(function (r) { setTimeout(r, 200); });   // let the render settle
+      ok('history.load', lastCode.indexOf('graph TD') === 0 && $('history').style.display === 'none');
+      ok('export.enabled.afterHistory', $('copyBtn').disabled === false && $('saveBtn').disabled === false);
+
+      // a fresh render closes an open overlay (shows the diagram, not history)
+      toggleHistory();
+      window.render('graph TD\n  M-->N', 'default', 100, '#fff', 'en');
+      await new Promise(function (r) { setTimeout(r, 300); });
+      ok('render.closesOverlay', $('history').style.display === 'none' && $('state').style.display !== 'flex');
+
+      } catch (err) {
+        R.push({ name: 'EXCEPTION:' + (err && err.message ? err.message : String(err)), pass: false });
+      }
+      var passed = R.filter(function (x) { return x.pass; }).length;
+      var failed = R.filter(function (x) { return !x.pass; }).map(function (x) { return x.name; });
+      var summary = JSON.stringify({ pass: passed, total: R.length, failed: failed });
+      try { window.webkit.messageHandlers.testResult.postMessage(summary); } catch (e) {}
+      return summary;
+    };
 
     // keyboard shortcuts (zoom / copy / save)
     window.addEventListener('keydown', function (e) {
@@ -343,7 +591,11 @@
       if (e.key === '=' || e.key === '+') { setScale(scale * 1.2); e.preventDefault(); }
       else if (e.key === '-') { setScale(scale / 1.2); e.preventDefault(); }
       else if (e.key === '0') { resetView(); e.preventDefault(); }
-      else if (e.key === 's') { e.preventDefault(); doSave(); }
+      else if (e.key === 's') { e.preventDefault(); doSave(); }   // doSave is a no-op while an overlay is open
+      else if (e.key === ',') {
+        e.preventDefault();
+        try { window.webkit.messageHandlers.openSettings.postMessage({}); } catch (e2) {}
+      }
       else if (e.key === 'c') {
         // if there is a text selection, let the browser copy that text; only copy PNG when nothing is selected
         var sel = window.getSelection ? String(window.getSelection()) : '';

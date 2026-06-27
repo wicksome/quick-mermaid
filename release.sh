@@ -24,27 +24,19 @@ echo "==> build dmg"
 DMG="QuickMermaid-$VER.dmg"
 mv -f QuickMermaid.dmg "$DMG"
 
-# Public file used for version checking (read by the app). Update and publish to a public location on each release.
-cat > version.json <<EOF
-{ "version": "$VER", "url": "https://github.com/wicksome/quick-mermaid/releases/latest" }
-EOF
-
 echo "built: $PWD/$DMG"
-echo "wrote: $PWD/version.json"
 
 if [[ "$PUBLISH" == "1" ]]; then
   echo "==> gh release create $TAG"
   gh release create "$TAG" "$DMG" \
     --repo wicksome/quick-mermaid \
-    --title "QuickMermaid $VER" \
+    --title "$TAG" \
     --notes "QuickMermaid $VER" \
     --target main
   echo "released: https://github.com/wicksome/quick-mermaid/releases/tag/$TAG"
 else
   echo
-  echo "다음으로 게시:"
-  echo "  1) Info.plist 버전 커밋·푸시"
-  echo "  2) ./release.sh $VER --publish   (또는)"
-  echo "     gh release create $TAG $DMG --repo wicksome/quick-mermaid --title \"QuickMermaid $VER\" --notes \"...\""
-  echo "  3) version.json 을 공개 위치에 배포(앱 버전 체크용)"
+  echo "To publish:"
+  echo "  1) ./release.sh $VER --publish   (or)"
+  echo "     gh release create $TAG $DMG --repo wicksome/quick-mermaid --title \"$TAG\" --notes \"...\""
 fi

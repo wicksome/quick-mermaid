@@ -1,23 +1,49 @@
 import AppKit
 import WebKit
 
-/// Native window for configuring the default theme, zoom level, and focus behavior.
-/// Changes are saved to UserDefaults immediately, and the preview WKWebView at the bottom re-renders the sample with the new settings.
+/// Native settings window with a sectioned, modern layout. Changes are saved to
+/// UserDefaults immediately; the preview WKWebView re-renders the sample with the
+/// new settings. On open it checks GitHub Releases for a newer version.
 final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDelegate {
     private var window: NSWindow?
+
+    // Controls
+    private let languagePopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let themePopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let zoomField = NSTextField()
     private let zoomStepper = NSStepper()
     private let bgWell = NSColorWell()
-    private let shortcutCheck = NSButton(checkboxWithTitle: L10n.t("settings.shortcut"), target: nil, action: nil)
+    private let shortcutCheck = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let recorderButton = NSButton(title: "", target: nil, action: nil)
-    private var recordingMonitor: Any?
-    private let keepOpenCheck = NSButton(checkboxWithTitle: L10n.t("settings.keepOpen"), target: nil, action: nil)
+    private let keepOpenCheck = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private let releasesButton = NSButton(title: "", target: nil, action: nil)
+
+    // Section headers
+    private let secAppearance = NSTextField(labelWithString: "")
+    private let secShortcut = NSTextField(labelWithString: "")
+    private let secWindow = NSTextField(labelWithString: "")
+    private let secAbout = NSTextField(labelWithString: "")
+    private let previewHeader = NSTextField(labelWithString: "")
+
+    // Row labels
+    private let languageLabel = NSTextField(labelWithString: "")
+    private let themeLabel = NSTextField(labelWithString: "")
+    private let zoomLabel = NSTextField(labelWithString: "")
+    private let bgLabel = NSTextField(labelWithString: "")
+    private let versionLabel = NSTextField(labelWithString: "")
+    private let updateStatusLabel = NSTextField(labelWithString: "")
+
     private var webView: WKWebView!
     private var previewLoaded = false
+    private var recordingMonitor: Any?
+    private var knownNewer: String?   // newer version found by the update check, if any
 
     /// Called when the window is closed (e.g., quit the app in CLI --settings mode). Ignored if nil.
     var onClose: (() -> Void)?
+
+    private static var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+    }
 
     private static let sample = """
     graph LR
@@ -28,75 +54,121 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
 
     func show() {
         if window == nil { build() }
+        window?.level = .floating   // float above the render panel
         NSApp.activate(ignoringOtherApps: true)
         window?.center()
         window?.makeKeyAndOrderFront(nil)
+        window?.orderFrontRegardless()
+        checkForUpdate()
     }
 
     private func build() {
-        let W: CGFloat = 480, H: CGFloat = 540
+        let W: CGFloat = 520, H: CGFloat = 680
+        let LX: CGFloat = 28, CX: CGFloat = 176, CW: CGFloat = 300
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: W, height: H),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
-        win.title = L10n.t("settings.title")
         win.delegate = self
         win.isReleasedWhenClosed = false
-
         let content = NSView(frame: NSRect(x: 0, y: 0, width: W, height: H))
 
-        // Theme
-        let themeLabel = makeLabel(L10n.t("settings.theme"), x: 20, y: H - 36, w: 120)
-        themePopup.frame = NSRect(x: 130, y: H - 40, width: 200, height: 26)
+        var y = H - 22
+        func section(_ lbl: NSTextField) {
+            lbl.font = .systemFont(ofSize: 11, weight: .semibold)
+            lbl.textColor = .tertiaryLabelColor
+            lbl.frame = NSRect(x: LX, y: y - 15, width: W - 2 * LX, height: 15)
+            content.addSubview(lbl); y -= 15 + 8
+        }
+        func sep() {
+            let b = NSBox(frame: NSRect(x: LX, y: y - 1, width: W - 2 * LX, height: 1))
+            b.boxType = .separator
+            content.addSubview(b); y -= 1 + 16
+        }
+        func row(_ h: CGFloat) -> CGFloat { let fy = y - h; y -= h + 12; return fy }
+        func label(_ l: NSTextField, _ fy: CGFloat) {
+            l.frame = NSRect(x: LX, y: fy + 4, width: 140, height: 18); content.addSubview(l)
+        }
+
+        // Appearance
+        section(secAppearance)
+        var fy = row(26); label(languageLabel, fy)
+        languagePopup.frame = NSRect(x: CX, y: fy, width: CW, height: 26)
+        languagePopup.addItems(withTitles: [L10n.t("settings.langSystem"), "English", "한국어"])
+        languagePopup.selectItem(at: Settings.language == "en" ? 1 : Settings.language == "ko" ? 2 : 0)
+        languagePopup.target = self; languagePopup.action = #selector(languageChanged)
+        content.addSubview(languagePopup)
+
+        fy = row(26); label(themeLabel, fy)
+        themePopup.frame = NSRect(x: CX, y: fy, width: CW, height: 26)
         themePopup.addItems(withTitles: Settings.themes)
         themePopup.selectItem(withTitle: Settings.theme)
-        themePopup.target = self
-        themePopup.action = #selector(themeChanged)
+        themePopup.target = self; themePopup.action = #selector(themeChanged)
+        content.addSubview(themePopup)
 
-        // Default zoom level
-        let zoomLabel = makeLabel(L10n.t("settings.zoom"), x: 20, y: H - 72, w: 120)
-        zoomField.frame = NSRect(x: 130, y: H - 76, width: 70, height: 24)
+        fy = row(26); label(bgLabel, fy)
+        bgWell.frame = NSRect(x: CX, y: fy + 1, width: 60, height: 24)
+        bgWell.color = color(fromHex: Settings.backgroundColor)
+        bgWell.target = self; bgWell.action = #selector(bgChanged)
+        content.addSubview(bgWell)
+
+        fy = row(28); label(zoomLabel, fy)
+        zoomField.frame = NSRect(x: CX, y: fy + 2, width: 70, height: 24)
         zoomField.integerValue = Settings.defaultZoom
-        zoomField.target = self
-        zoomField.action = #selector(zoomFieldChanged)
-        zoomStepper.frame = NSRect(x: 204, y: H - 78, width: 20, height: 28)
+        zoomField.target = self; zoomField.action = #selector(zoomFieldChanged)
+        zoomStepper.frame = NSRect(x: CX + 74, y: fy, width: 20, height: 28)
         zoomStepper.minValue = 10; zoomStepper.maxValue = 800; zoomStepper.increment = 10
         zoomStepper.integerValue = Settings.defaultZoom
-        zoomStepper.target = self
-        zoomStepper.action = #selector(zoomStepperChanged)
+        zoomStepper.target = self; zoomStepper.action = #selector(zoomStepperChanged)
+        content.addSubview(zoomField); content.addSubview(zoomStepper)
 
-        // Background color
-        let bgLabel = makeLabel(L10n.t("settings.bg"), x: 20, y: H - 108, w: 120)
-        bgWell.frame = NSRect(x: 130, y: H - 112, width: 60, height: 24)
-        bgWell.color = color(fromHex: Settings.backgroundColor)
-        bgWell.target = self
-        bgWell.action = #selector(bgChanged)
+        sep()
 
-        // Global shortcut (checkbox + recorder). Default OFF — enabling it prompts for Accessibility permission.
-        shortcutCheck.frame = NSRect(x: 18, y: H - 146, width: 250, height: 20)
+        // Shortcut
+        section(secShortcut)
+        fy = row(28)
+        shortcutCheck.frame = NSRect(x: LX, y: fy + 4, width: 300, height: 20)
         shortcutCheck.state = Settings.shortcutEnabled ? .on : .off
-        shortcutCheck.target = self
-        shortcutCheck.action = #selector(shortcutEnabledChanged)
-        recorderButton.frame = NSRect(x: 270, y: H - 150, width: 110, height: 26)
+        shortcutCheck.target = self; shortcutCheck.action = #selector(shortcutEnabledChanged)
+        recorderButton.frame = NSRect(x: W - LX - 130, y: fy, width: 130, height: 26)
         recorderButton.bezelStyle = .rounded
         recorderButton.title = Settings.shortcutDisplay
-        recorderButton.target = self
-        recorderButton.action = #selector(startRecording)
+        recorderButton.target = self; recorderButton.action = #selector(startRecording)
+        content.addSubview(shortcutCheck); content.addSubview(recorderButton)
 
-        // Keep open when focus is lost (default is to close → checkbox unchecked)
-        keepOpenCheck.frame = NSRect(x: 18, y: H - 182, width: 320, height: 20)
+        sep()
+
+        // Window
+        section(secWindow)
+        fy = row(22)
+        keepOpenCheck.frame = NSRect(x: LX, y: fy + 2, width: W - 2 * LX, height: 20)
         keepOpenCheck.state = Settings.closeOnFocusLoss ? .off : .on
-        keepOpenCheck.target = self
-        keepOpenCheck.action = #selector(keepOpenChanged)
+        keepOpenCheck.target = self; keepOpenCheck.action = #selector(keepOpenChanged)
+        content.addSubview(keepOpenCheck)
 
-        let previewLabel = makeLabel(L10n.t("settings.preview"), x: 20, y: H - 212, w: 120)
-        previewLabel.textColor = .secondaryLabelColor
+        sep()
 
-        // Preview WebView (renderer.html#preview — render without toolbar)
-        let frame = NSRect(x: 16, y: 16, width: W - 32, height: H - 236)
-        webView = WKWebView(frame: frame)
+        // About
+        section(secAbout)
+        fy = row(24)
+        versionLabel.frame = NSRect(x: LX, y: fy + 3, width: 220, height: 18)
+        versionLabel.textColor = .secondaryLabelColor
+        releasesButton.frame = NSRect(x: W - LX - 150, y: fy - 2, width: 150, height: 26)
+        releasesButton.bezelStyle = .rounded
+        releasesButton.target = self; releasesButton.action = #selector(openReleases)
+        content.addSubview(versionLabel); content.addSubview(releasesButton)
+        fy = row(18)
+        updateStatusLabel.frame = NSRect(x: LX, y: fy + 1, width: W - 2 * LX, height: 16)
+        updateStatusLabel.font = .systemFont(ofSize: 11)
+        content.addSubview(updateStatusLabel)
+
+        sep()
+
+        // Preview
+        section(previewHeader)
+        webView = WKWebView(frame: NSRect(x: LX, y: 16, width: W - 2 * LX, height: max(120, y - 16)))
         webView.navigationDelegate = self
         webView.wantsLayer = true
         webView.layer?.borderColor = NSColor.separatorColor.cgColor
@@ -106,21 +178,50 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
         if let url = Bundle.main.url(forResource: "renderer", withExtension: "html") {
             var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
             comps?.fragment = "preview"
-            let target = comps?.url ?? url
-            webView.loadFileURL(target, allowingReadAccessTo: url.deletingLastPathComponent())
+            webView.loadFileURL(comps?.url ?? url, allowingReadAccessTo: url.deletingLastPathComponent())
         }
+        content.addSubview(webView)
 
-        [themeLabel, themePopup, zoomLabel, zoomField, zoomStepper,
-         bgLabel, bgWell, shortcutCheck, recorderButton,
-         keepOpenCheck, previewLabel, webView].forEach { content.addSubview($0) }
         win.contentView = content
         self.window = win
+        relabel()
     }
 
-    private func makeLabel(_ text: String, x: CGFloat, y: CGFloat, w: CGFloat) -> NSTextField {
-        let l = NSTextField(labelWithString: text)
-        l.frame = NSRect(x: x, y: y, width: w, height: 18)
-        return l
+    /// Re-apply localized strings (build time + on language change).
+    private func relabel() {
+        window?.title = L10n.t("settings.title")
+        secAppearance.stringValue = L10n.t("settings.secAppearance")
+        secShortcut.stringValue = L10n.t("settings.secShortcut")
+        secWindow.stringValue = L10n.t("settings.secWindow")
+        secAbout.stringValue = L10n.t("settings.secAbout")
+        previewHeader.stringValue = L10n.t("settings.preview")
+        languageLabel.stringValue = L10n.t("settings.language")
+        languagePopup.item(at: 0)?.title = L10n.t("settings.langSystem")
+        themeLabel.stringValue = L10n.t("settings.theme")
+        zoomLabel.stringValue = L10n.t("settings.zoom")
+        bgLabel.stringValue = L10n.t("settings.bg")
+        shortcutCheck.title = L10n.t("settings.shortcut")
+        keepOpenCheck.title = L10n.t("settings.keepOpen")
+        versionLabel.stringValue = "\(L10n.t("settings.version")) \(Self.appVersion)"
+        releasesButton.title = L10n.t("settings.openReleases")
+        applyUpdateStatus()
+    }
+
+    private func applyUpdateStatus() {
+        if let v = knownNewer {
+            updateStatusLabel.stringValue = "\(L10n.t("settings.updateAvailable")): v\(v)"
+            updateStatusLabel.textColor = .systemBlue
+        } else {
+            updateStatusLabel.stringValue = L10n.t("settings.upToDate")
+            updateStatusLabel.textColor = .tertiaryLabelColor
+        }
+    }
+
+    private func checkForUpdate() {
+        UpdateCheck.checkNewer(than: Self.appVersion) { [weak self] newer in
+            self?.knownNewer = newer
+            self?.applyUpdateStatus()
+        }
     }
 
     private func updatePreview() {
@@ -132,7 +233,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
         } else {
             json = "[\"\"]"
         }
-        webView.evaluateJavaScript("window.render(\(json)[0], '\(Settings.theme)', \(Settings.defaultZoom), '\(Settings.backgroundColor)');", completionHandler: nil)
+        webView.evaluateJavaScript("window.render(\(json)[0], '\(Settings.theme)', \(Settings.defaultZoom), '\(Settings.backgroundColor)', '\(L10n.lang)');", completionHandler: nil)
     }
 
     // MARK: - Hex <-> NSColor
@@ -155,6 +256,15 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
 
     // MARK: - Actions
 
+    @objc private func languageChanged() {
+        switch languagePopup.indexOfSelectedItem {
+        case 1: Settings.language = "en"
+        case 2: Settings.language = "ko"
+        default: Settings.language = "system"
+        }
+        relabel()
+        updatePreview()
+    }
     @objc private func themeChanged() {
         Settings.theme = themePopup.titleOfSelectedItem ?? "default"
         updatePreview()
@@ -172,25 +282,29 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
         updatePreview()
     }
     @objc private func keepOpenChanged() {
-        // Checked = "keep open" → closeOnFocusLoss = false
         Settings.closeOnFocusLoss = (keepOpenCheck.state == .off)
     }
+    @objc private func bgChanged() {
+        Settings.backgroundColor = hex(from: bgWell.color)
+        updatePreview()
+    }
+    @objc private func openReleases() {
+        if let url = URL(string: UpdateCheck.releasesURL) { NSWorkspace.shared.open(url) }
+    }
 
-    // MARK: - Shortcut
+    // MARK: - Shortcut recorder
 
     @objc private func shortcutEnabledChanged() {
         Settings.shortcutEnabled = (shortcutCheck.state == .on)
         postShortcutChanged()
     }
-
-    /// Recorder button click → captures the next key combination and saves it as the shortcut.
     @objc private func startRecording() {
         recorderButton.title = L10n.t("settings.recording")
         recordingMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
             if event.keyCode == 53 { self.endRecording(); return nil } // Esc → cancel
             let mods = event.modifierFlags.intersection([.command, .option, .control, .shift])
-            guard !mods.isEmpty else { return nil } // at least one modifier required
+            guard !mods.isEmpty else { return nil }
             Settings.shortcutKeyCode = Int(event.keyCode)
             Settings.shortcutModifiers = Int(mods.rawValue)
             Settings.shortcutDisplay = Self.displayString(mods: mods, chars: event.charactersIgnoringModifiers, keyCode: event.keyCode)
@@ -199,12 +313,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
             return nil
         }
     }
-
     private func endRecording() {
         if let m = recordingMonitor { NSEvent.removeMonitor(m); recordingMonitor = nil }
         recorderButton.title = Settings.shortcutDisplay
     }
-
     private static func displayString(mods: NSEvent.ModifierFlags, chars: String?, keyCode: UInt16) -> String {
         var s = ""
         if mods.contains(.control) { s += "⌃" }
@@ -214,16 +326,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
         let key = (chars?.isEmpty == false) ? chars!.uppercased() : "key\(keyCode)"
         return s + key
     }
-
-    /// Notifies the resident app of a shortcut settings change so it re-registers the hotkey.
     private func postShortcutChanged() {
         DistributedNotificationCenter.default().postNotificationName(
             NSNotification.Name(Settings.changedNotification), object: nil,
             userInfo: nil, deliverImmediately: true)
-    }
-    @objc private func bgChanged() {
-        Settings.backgroundColor = hex(from: bgWell.color)
-        updatePreview()
     }
 
     // MARK: - WKNavigationDelegate

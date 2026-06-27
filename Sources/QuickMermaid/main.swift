@@ -6,11 +6,14 @@ enum AppMode {
     case cli(String)      // --stdin: render mermaid received via pipe once and exit
     case settings         // --settings: show settings window and exit when closed
     case selfTest         // --selftest: verify offscreen render and exit
+    case test             // --test: run the renderer JS test suite offscreen and exit
 }
 
 let args = CommandLine.arguments
 let mode: AppMode
-if args.contains("--selftest") {
+if args.contains("--test") {
+    mode = .test
+} else if args.contains("--selftest") {
     mode = .selfTest
 } else if args.contains("--settings") {
     mode = .settings

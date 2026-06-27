@@ -36,7 +36,7 @@ for arg in "$@"; do
       ;;
     --install)
       echo "==> install to /Applications + qmmd CLI"
-      pkill -f "QuickMermaid.app" 2>/dev/null || true
+      pkill -x QuickMermaid 2>/dev/null || true
       rm -rf /Applications/"$APP"
       cp -R "$APP" /Applications/
       xattr -dr com.apple.quarantine /Applications/"$APP" 2>/dev/null || true

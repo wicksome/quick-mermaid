@@ -15,9 +15,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // ⌘, from the render panel opens Settings (used in cli/service modes)
+        panel.onOpenSettings = { [weak self] in self?.openSettings() }
         switch mode {
         case .selfTest:
             runSelfTest()
+        case .test:
+            panel.runTests { json in
+                FileHandle.standardError.write(Data("TEST \(json)\n".utf8))
+                exit(json.contains("\"failed\":[]") ? 0 : 1)
+            }
         case .cli(let code):
             runCLI(code: code)
         case .settings:
@@ -31,7 +38,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DistributedNotificationCenter.default().addObserver(
                 self, selector: #selector(settingsChanged),
                 name: NSNotification.Name(Settings.changedNotification), object: nil)
+            checkForUpdate()
         }
+    }
+
+    private static var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+    }
+
+    /// Check GitHub Releases on launch; if a newer version exists, surface it in the menu.
+    private func checkForUpdate() {
+        UpdateCheck.checkNewer(than: Self.appVersion) { [weak self] newer in
+            guard let self, let newer, let menu = self.statusItem?.menu else { return }
+            let title = "\(L10n.t("menu.updateAvailable")) (v\(newer))"
+            let item = NSMenuItem(title: title, action: #selector(self.openReleases), keyEquivalent: "")
+            item.target = self
+            menu.insertItem(item, at: 0)
+            menu.insertItem(.separator(), at: 1)
+        }
+    }
+
+    @objc private func openReleases() {
+        if let url = URL(string: UpdateCheck.releasesURL) { NSWorkspace.shared.open(url) }
     }
 
     // Explicitly declare secure coding for state restoration → suppresses console warnings

@@ -7,7 +7,7 @@ set -euo pipefail
 
 BIN="/Applications/QuickMermaid.app/Contents/MacOS/QuickMermaid"
 if [ ! -x "$BIN" ]; then
-  echo "qmmd: QuickMermaid.app 을 /Applications 에서 찾을 수 없습니다." >&2
+  echo "qmmd: QuickMermaid.app not found in /Applications." >&2
   exit 1
 fi
 

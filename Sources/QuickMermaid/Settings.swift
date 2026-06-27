@@ -10,6 +10,7 @@ enum Settings {
     private static let kZoom = "defaultZoom"
     private static let kCloseOnFocusLoss = "closeOnFocusLoss"
     private static let kBackground = "backgroundColor"
+    private static let kLanguage = "language"
     private static let kShortcutEnabled = "shortcutEnabled"
     private static let kShortcutKeyCode = "shortcutKeyCode"
     private static let kShortcutModifiers = "shortcutModifiers"
@@ -35,10 +36,31 @@ enum Settings {
         set { d.set(newValue, forKey: kCloseOnFocusLoss) }
     }
 
-    /// Canvas background color (hex, e.g. "#FFFFFF"). Independent of the mermaid theme. Defaults to white when not set.
+    /// Canvas background color (hex "#RRGGBB"). Independent of the mermaid theme. Defaults to white.
+    /// Validated on read so an arbitrary stored value can't be injected into the renderer JS.
     static var backgroundColor: String {
-        get { d.string(forKey: kBackground) ?? "#FFFFFF" }
+        get {
+            let v = d.string(forKey: kBackground) ?? "#FFFFFF"
+            let valid = v.count == 7 && v.hasPrefix("#") && v.dropFirst().allSatisfy { $0.isHexDigit }
+            return valid ? v : "#FFFFFF"
+        }
         set { d.set(newValue, forKey: kBackground) }
+    }
+
+    /// UI language preference: "system" (default), "en", or "ko".
+    static var language: String {
+        get { d.string(forKey: kLanguage) ?? "system" }
+        set { d.set(newValue, forKey: kLanguage) }
+    }
+
+    /// Resolved language code ("en"/"ko"): honors the preference, falls back to the system language (English fallback).
+    static var resolvedLanguage: String {
+        switch language {
+        case "en", "ko": return language
+        default:
+            let pref = Locale.preferredLanguages.first ?? "en"
+            return pref.hasPrefix("ko") ? "ko" : "en"
+        }
     }
 
     // MARK: - Global Shortcut

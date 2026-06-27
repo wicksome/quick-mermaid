@@ -33,7 +33,12 @@ See `README.md` for user-facing docs and `docs/specs/` for design notes.
 1. `./build.sh --selftest` must print `SELFTEST PASS`. This loads `renderer.html`
    in an offscreen WKWebView and renders a sample diagram — it is the regression
    gate for the render pipeline.
-2. For changes to triggers/UI, also confirm the relevant process stays alive and
+2. `QuickMermaid.app/Contents/MacOS/QuickMermaid --test` runs the renderer JS test
+   suite (`window.__test` in `renderer.html`) offscreen and prints
+   `TEST {"pass":N,"total":N,"failed":[]}` — exit 0 only when `failed` is empty.
+   It covers render/empty/error states, the source overlay, and history. Add cases
+   to `window.__test` when you touch the renderer; keep it green.
+3. For changes to triggers/UI, also confirm the relevant process stays alive and
    doesn't crash (e.g. `printf 'graph TD\n A-->B\n' | ".../QuickMermaid" --stdin`).
 3. **GUI behavior cannot be verified headlessly** (Services menu, the floating
    panel, copy/save dialogs, the global shortcut, accessibility prompts). State
@@ -62,7 +67,7 @@ Run long/log-heavy builds via a subagent when possible to keep the main context 
 
 ### renderer.html contract (Swift ↔ JS)
 
-- Swift calls `window.render(code, theme, zoomPercent, bg)`.
+- Swift calls `window.render(code, theme, zoomPercent, bg, lang)`.
 - Swift posts to message handlers: `result` (selftest), `copyPNG`, `savePNG`.
 - JS calls back `window.copied()` / `window.saved()` after Swift confirms the action.
 - `window.exportData()` returns `{svg, w, h, bg}` for diagram-only PNG export.
@@ -83,7 +88,7 @@ Run long/log-heavy builds via a subagent when possible to keep the main context 
 - **PNG export = offscreen SVG render** (diagram only, full size regardless of
   on-screen zoom). Do not revert to snapshotting the visible WebView.
 - The app is `.accessory` / `LSUIElement` (menu-bar only, no Dock icon).
-- Bundle id is `me.wickso.quickmermaid`. Changing it resets `UserDefaults`.
+- Bundle id is `me.wickso.quickmermaid` — reverse-DNS of the `wickso.me` domain (not a typo of the `wicksome` org). Changing it resets `UserDefaults`.
 
 ## Known gotchas
 
