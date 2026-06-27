@@ -30,26 +30,16 @@ Services, or pipe via CLI) → diagram. Think Quick Look, not Preview.app.
 
 ## Install
 
-### Download
-
-Grab the latest `QuickMermaid-x.y.z.dmg` from [Releases](https://github.com/wicksome/quick-mermaid/releases),
-open it, and drag **QuickMermaid.app** to `/Applications`.
+Download the latest `QuickMermaid-x.y.z.dmg` from
+[Releases](https://github.com/wicksome/quick-mermaid/releases), open it, and drag
+**QuickMermaid.app** to `/Applications`.
 
 The app is unsigned (ad-hoc), so on first launch Gatekeeper will warn you. Either:
 
 - Right-click the app → **Open** → **Open**, or
 - `xattr -dr com.apple.quarantine /Applications/QuickMermaid.app`
 
-### Build from source
-
-Requires the Swift toolchain (Xcode or Xcode Command Line Tools). No IDE needed.
-
-```bash
-./build.sh            # build QuickMermaid.app
-./build.sh --dmg      # build .app + QuickMermaid.dmg
-./build.sh --selftest # build, then verify the offline render pipeline
-./build.sh --install  # install to /Applications + put the qmmd CLI on PATH, then launch
-```
+Prefer to build it yourself? `./build.sh --install` (see [AGENTS.md](AGENTS.md)).
 
 ## Usage
 
@@ -96,50 +86,15 @@ Open via `qmmd` (no input) or the menu-bar icon → **Settings**. Configure the
 default theme, default zoom, background color, the global shortcut, and whether
 the panel closes when it loses focus. A live preview reflects your choices.
 
-## Release
-
-### GitHub Actions
-
-Actions → **Release** → **Run workflow**. Inputs:
-
-- `bump`: `patch` (default) / `minor` / `major` — increments from the latest tag.
-- `version`: an explicit version (e.g. `1.2.0`); overrides `bump`.
-
-The workflow injects the version, builds the dmg, commits the version bump,
-pushes a `vX.Y.Z` tag, and creates a GitHub Release with the dmg attached.
-
-### Local
-
-```bash
-./release.sh 1.2.0            # set version + build dmg
-./release.sh 1.2.0 --publish  # also create the GitHub Release
-```
-
-## How it works
-
-Native AppKit menu-bar app (no third-party dependencies). Diagrams render in a
-`WKWebView` using a vendored Mermaid v10 build (`Resources/mermaid.min.js`).
-PNG export rasterizes the SVG off-screen at natural size, so the result is the
-diagram only — independent of on-screen zoom/scroll.
-
-| File | Role |
-|------|------|
-| `Sources/QuickMermaid/main.swift` | Entry point; mode dispatch (`--stdin` / `--settings` / `--selftest`) |
-| `AppDelegate.swift` | Menu-bar item, Services registration, CLI/Settings modes, global hotkey |
-| `ServicesProvider.swift` | `renderMermaid` Services handler |
-| `MermaidPanel.swift` | Floating panel, render, copy/save PNG |
-| `HotkeyManager.swift` | Carbon global hotkey |
-| `SelectionReader.swift` | Selection → clipboard source resolution |
-| `Settings.swift` / `SettingsWindow.swift` | Preferences (UserDefaults) + window |
-| `L10n.swift` | Native string localization |
-| `Resources/renderer.html` | Mermaid loader, render, zoom/pan, source view, i18n |
-| `build.sh` / `release.sh` | Build, package, release |
-| `tools/make-icon.*` | Generate the app icon |
-
 ## Limitations
 
 - Unsigned / not notarized — intended for personal use; Gatekeeper warns on first launch.
-- Very large diagrams: Mermaid limits are raised (`maxTextSize`, `maxEdges`); beyond them the error view explains why. PNG export is capped at ~8192 px.
+- Very large diagrams: Mermaid limits are raised; beyond them the error view explains why. PNG export is capped at ~8192 px.
+
+## Development
+
+This project is developed primarily by AI. Architecture, build/verify steps,
+conventions, and release process are in **[AGENTS.md](AGENTS.md)**.
 
 ## License
 

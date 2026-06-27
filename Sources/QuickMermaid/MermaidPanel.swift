@@ -27,6 +27,12 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
     /// Called when the panel is closed (e.g., quit the app in CLI single-use viewer mode). Ignored if nil.
     var onClose: (() -> Void)?
 
+    /// Called when the user requests Settings from the panel (⌘,). Ignored if nil.
+    var onOpenSettings: (() -> Void)?
+
+    /// Skip the next focus-loss auto-close once (e.g. when our own Settings window takes focus).
+    private var ignoreResignOnce = false
+
     // MARK: - Public
 
     func show(code: String) {
@@ -61,22 +67,26 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
         config.userContentController.add(self, name: "result")
         config.userContentController.add(self, name: "copyPNG")
         config.userContentController.add(self, name: "savePNG")
+        config.userContentController.add(self, name: "openSettings")
         let frame = NSRect(x: 0, y: 0, width: 900, height: 700)
         webView = WKWebView(frame: frame, configuration: config)
         webView.navigationDelegate = self
         webView.autoresizingMask = [.width, .height]
-        webView.setValue(false, forKey: "drawsBackground") // use html background instead of transparency
+        // Intentional KVC on the undocumented `drawsBackground` so the html background shows
+        // instead of WKWebView's default white. Do not "clean up" — there is no public API for this.
+        webView.setValue(false, forKey: "drawsBackground")
 
         let p = QuickPanel(
             contentRect: frame,
-            styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],
+            styleMask: [.titled, .closable, .resizable, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
+        // Standard (draggable) title bar above the web toolbar. We do NOT use
+        // fullSizeContentView: the web content must not cover the title bar, or
+        // there would be no native region to drag the window by.
         p.title = "QuickMermaid"
-        p.titleVisibility = .hidden            // prevent the title text from being drawn over the toolbar
-        p.titlebarAppearsTransparent = true
-        p.isMovableByWindowBackground = false
+        p.titleVisibility = .hidden
         p.isFloatingPanel = true
         p.level = .floating
         p.hidesOnDeactivate = false
@@ -130,7 +140,8 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
         let theme = selfTestMode ? "default" : Settings.theme
         let zoom = selfTestMode ? 100 : Settings.defaultZoom
         let bg = selfTestMode ? "#FFFFFF" : Settings.backgroundColor
-        webView.evaluateJavaScript("window.render(\(json)[0], '\(theme)', \(zoom), '\(bg)');", completionHandler: nil)
+        let lang = selfTestMode ? "en" : L10n.lang
+        webView.evaluateJavaScript("window.render(\(json)[0], '\(theme)', \(zoom), '\(bg)', '\(lang)');", completionHandler: nil)
     }
 
     private func deliverResult(_ ok: Bool, _ info: String) {
@@ -162,15 +173,12 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
             save.allowedContentTypes = [.png]
             save.nameFieldStringValue = "diagram.png"
             save.canCreateDirectories = true
-            let onResult: (NSApplication.ModalResponse) -> Void = { resp in
-                guard resp == .OK, let url = save.url else { return }
+            // Present as a standalone modal dialog (not a sheet): the render panel is a
+            // non-activating floating panel, so a sheet attached to it would not appear.
+            NSApp.activate(ignoringOtherApps: true)
+            if save.runModal() == .OK, let url = save.url {
                 try? data.write(to: url)
                 self?.webView.evaluateJavaScript("window.saved && window.saved()", completionHandler: nil)
-            }
-            if let win = self?.panel {
-                save.beginSheetModal(for: win, completionHandler: onResult)
-            } else {
-                onResult(save.runModal())
             }
         }
     }
@@ -178,6 +186,8 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
     /// Extracts only the current diagram's SVG at its natural size, renders it alone in an offscreen WebView, then takes a snapshot.
     /// → Captures only the diagram, without toolbar or margins, regardless of the current screen zoom.
     private func exportImage(completion: @escaping (NSImage?) -> Void) {
+        // One export at a time: ignore re-entrant calls while one is in flight.
+        guard exportCompletion == nil, exportWebView == nil else { return }
         webView.evaluateJavaScript("window.exportData()") { [weak self] result, _ in
             guard let self else { completion(nil); return }
             guard let json = result as? String,
@@ -215,6 +225,11 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
         self.exportWebView = wv
         self.exportCompletion = completion
         wv.loadHTMLString(html, baseURL: Bundle.main.resourceURL)
+        // Safety: if the offscreen load never finishes, don't hang/leak.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+            guard let self, self.exportWebView === wv, self.exportCompletion != nil else { return }
+            self.finishExport(nil)
+        }
     }
 
     private func finishExport(_ image: NSImage?) {
@@ -261,6 +276,9 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
             copyPNG()
         case "savePNG":
             savePNG()
+        case "openSettings":
+            ignoreResignOnce = true   // opening Settings steals key focus; don't auto-close the panel
+            onOpenSettings?()
         case "result":
             let dict = message.body as? [String: Any]
             let ok = (dict?["ok"] as? Bool) ?? false
@@ -276,6 +294,8 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
     func windowDidResignKey(_ notification: Notification) {
         // Do not close during self-test (offscreen).
         if selfTestMode { return }
+        // Skip once when our own Settings window took focus.
+        if ignoreResignOnce { ignoreResignOnce = false; return }
         // Based on settings: close when focus is lost (default) or keep open
         if Settings.closeOnFocusLoss { panel?.close() }
     }

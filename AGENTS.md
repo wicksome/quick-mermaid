@@ -62,7 +62,7 @@ Run long/log-heavy builds via a subagent when possible to keep the main context 
 
 ### renderer.html contract (Swift ↔ JS)
 
-- Swift calls `window.render(code, theme, zoomPercent, bg)`.
+- Swift calls `window.render(code, theme, zoomPercent, bg, lang)`.
 - Swift posts to message handlers: `result` (selftest), `copyPNG`, `savePNG`.
 - JS calls back `window.copied()` / `window.saved()` after Swift confirms the action.
 - `window.exportData()` returns `{svg, w, h, bg}` for diagram-only PNG export.
@@ -83,7 +83,7 @@ Run long/log-heavy builds via a subagent when possible to keep the main context 
 - **PNG export = offscreen SVG render** (diagram only, full size regardless of
   on-screen zoom). Do not revert to snapshotting the visible WebView.
 - The app is `.accessory` / `LSUIElement` (menu-bar only, no Dock icon).
-- Bundle id is `me.wickso.quickmermaid`. Changing it resets `UserDefaults`.
+- Bundle id is `me.wickso.quickmermaid` — reverse-DNS of the `wickso.me` domain (not a typo of the `wicksome` org). Changing it resets `UserDefaults`.
 
 ## Known gotchas
 

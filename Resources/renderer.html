@@ -14,15 +14,12 @@
   #toolbar {
     position: fixed; top: 0; left: 0; right: 0; height: 44px;
     display: flex; align-items: center; gap: 8px;
-    /* left padding reserves space for the macOS traffic-light buttons */
-    padding: 0 12px 0 84px;
+    padding: 0 12px;
     background: rgba(245,245,247,0.92);
     border-bottom: 1px solid #e3e3e6;
     backdrop-filter: saturate(180%) blur(20px);
-    -webkit-app-region: drag;
     z-index: 10;
   }
-  #toolbar > * { -webkit-app-region: no-drag; }
   #toolbar button {
     font-size: 12px; height: 24px; width: 28px;
     border: 1px solid #d2d2d7; border-radius: 6px;
@@ -104,14 +101,14 @@
 </head>
 <body>
   <div id="toolbar">
-    <button id="zoomOut" title="축소 (⌘−)">−</button>
+    <button id="zoomOut" title="Zoom out (⌘−)">−</button>
     <span id="zoomLabel">100%</span>
-    <button id="zoomIn" title="확대 (⌘+)">+</button>
-    <button id="zoomReset" class="text" title="원래대로 (⌘0)">리셋</button>
+    <button id="zoomIn" title="Zoom in (⌘+)">+</button>
+    <button id="zoomReset" class="text" title="Reset (⌘0)">Reset</button>
     <span class="spacer"></span>
-    <button id="srcBtn" class="text" title="선택한 텍스트(소스) 보기">&lt;/&gt; 소스</button>
-    <button id="saveBtn" class="text" title="PNG 파일로 저장 (⌘S)">Save PNG</button>
-    <button id="copyBtn" class="text" title="이미지 복사 (⌘C)">Copy PNG</button>
+    <button id="srcBtn" class="text" title="Show source text">&lt;/&gt; Source</button>
+    <button id="saveBtn" class="text" title="Save as PNG (⌘S)">Save PNG</button>
+    <button id="copyBtn" class="text" title="Copy image (⌘C)">Copy PNG</button>
   </div>
 
   <div id="stage">
@@ -159,8 +156,13 @@
         tipSource: 'Show source text', tipSave: 'Save as PNG (⌘S)', tipCopy: 'Copy image (⌘C)'
       }
     };
-    var L = I18N[((navigator.language || 'en').slice(0, 2) === 'ko') ? 'ko' : 'en'];
-    function applyI18n() {
+    function pickLang(lang) {
+      var l = lang || navigator.language || 'en';
+      return l.slice(0, 2) === 'ko' ? 'ko' : 'en';
+    }
+    var L = I18N[pickLang(null)];
+    function applyI18n(lang) {
+      L = I18N[pickLang(lang)];
       var $ = function (id) { return document.getElementById(id); };
       $('zoomOut').title = L.tipZoomOut;
       $('zoomIn').title = L.tipZoomIn;
@@ -297,10 +299,11 @@
     }
 
     // Swift entry point
-    window.render = function (code, theme, zoomPercent, bg) {
+    window.render = function (code, theme, zoomPercent, bg, lang) {
       lastCode = code || "";
       currentTheme = theme || "default";
       applyBackground(bg);
+      applyI18n(lang);
       scale = (zoomPercent && zoomPercent > 0) ? (zoomPercent / 100) : 1;
       applyTransform();
       if (sourceOpen) renderSource();
@@ -344,6 +347,10 @@
       else if (e.key === '-') { setScale(scale / 1.2); e.preventDefault(); }
       else if (e.key === '0') { resetView(); e.preventDefault(); }
       else if (e.key === 's') { e.preventDefault(); doSave(); }
+      else if (e.key === ',') {
+        e.preventDefault();
+        try { window.webkit.messageHandlers.openSettings.postMessage({}); } catch (e2) {}
+      }
       else if (e.key === 'c') {
         // if there is a text selection, let the browser copy that text; only copy PNG when nothing is selected
         var sel = window.getSelection ? String(window.getSelection()) : '';
