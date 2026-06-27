@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# qmmd — renders mermaid text in a QuickMermaid panel.
+#   pbpaste | qmmd        # render from pipe (stdin)
+#   qmmd flow.mmd a.mmd   # render files
+#   qmmd                  # run with no input → settings window
+set -euo pipefail
+
+BIN="/Applications/QuickMermaid.app/Contents/MacOS/QuickMermaid"
+if [ ! -x "$BIN" ]; then
+  echo "qmmd: QuickMermaid.app 을 /Applications 에서 찾을 수 없습니다." >&2
+  exit 1
+fi
+
+if [ "$#" -gt 0 ]; then
+  # if file arguments are given, concatenate and render them
+  cat "$@" | "$BIN" --stdin
+elif [ -t 0 ]; then
+  # run interactively without a pipe → settings window
+  "$BIN" --settings
+else
+  # render from pipe (stdin)
+  "$BIN" --stdin
+fi

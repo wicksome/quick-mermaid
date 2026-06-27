@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: light; }
+  html, body {
+    margin: 0; height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+    color: #1d1d1f; background: #ffffff;
+    overflow: hidden;
+  }
+  #toolbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 44px;
+    display: flex; align-items: center; gap: 8px;
+    /* left padding reserves space for the macOS traffic-light buttons */
+    padding: 0 12px 0 84px;
+    background: rgba(245,245,247,0.92);
+    border-bottom: 1px solid #e3e3e6;
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-app-region: drag;
+    z-index: 10;
+  }
+  #toolbar > * { -webkit-app-region: no-drag; }
+  #toolbar button {
+    font-size: 12px; height: 24px; width: 28px;
+    border: 1px solid #d2d2d7; border-radius: 6px;
+    background: #fff; color: #1d1d1f; cursor: pointer;
+  }
+  #toolbar button.text { width: auto; padding: 0 10px; }
+  #toolbar button.on { background: #007aff; color: #fff; border-color: #007aff; }
+  #zoomLabel { font-size: 12px; color: #6e6e73; min-width: 42px; text-align: center; }
+  .spacer { flex: 1; }
+
+  body.preview #toolbar { display: none; }
+  body.preview #stage { top: 0; }
+
+  #stage {
+    position: absolute; top: 44px; left: 0; right: 0; bottom: 0;
+    overflow: hidden; cursor: grab;
+  }
+  #stage.panning { cursor: grabbing; }
+  #content {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0; padding: 24px;
+  }
+  #diagram svg { display: block; }
+
+  /* empty/error state view */
+  #state {
+    display: none; position: absolute; inset: 44px 0 0 0;
+    align-items: center; justify-content: center; flex-direction: column;
+    text-align: center; padding: 32px;
+  }
+  body.preview #state { inset: 0; }
+  #state .glyph { font-size: 56px; line-height: 1; margin-bottom: 16px; opacity: .9; }
+  #state .title { font-size: 17px; font-weight: 600; color: #1d1d1f; }
+  #state .subtitle { font-size: 13px; color: #6e6e73; margin-top: 8px; max-width: 420px; }
+  #state .detail {
+    display: none; margin-top: 16px; max-width: 560px; width: 100%;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+    color: #8a1c1c; background: #fff3f3; border: 1px solid #f0caca;
+    border-radius: 8px; padding: 10px 12px; text-align: left;
+    white-space: pre-wrap; word-break: break-word;
+  }
+
+  /* source overlay */
+  #source {
+    display: none; position: absolute; inset: 44px 0 0 0;
+    background: #fbfbfd; overflow: auto; padding: 20px;
+  }
+  body.preview #source { inset: 0; }
+  #source pre {
+    margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px; line-height: 1.6; color: #1d1d1f; white-space: pre-wrap; word-break: break-word;
+  }
+  #source .kw { color: #9b2393; font-weight: 600; }   /* keyword */
+  #source .op { color: #0b7285; }                       /* arrow/operator */
+  #source .c  { color: #6e7781; font-style: italic; }   /* comment */
+
+  /* toast (copy/save feedback) */
+  #toast {
+    position: fixed; left: 50%; top: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    display: flex; align-items: center; gap: 9px;
+    padding: 13px 20px; border-radius: 14px;
+    background: rgba(28,28,30,0.9); color: #fff;
+    font-size: 15px; font-weight: 600; letter-spacing: -0.2px;
+    box-shadow: 0 10px 34px rgba(0,0,0,0.28);
+    backdrop-filter: blur(20px) saturate(180%);
+    opacity: 0; pointer-events: none; z-index: 100;
+    transition: opacity .18s ease, transform .2s cubic-bezier(.2,.8,.2,1);
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  #toast .ic {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #30d158; color: #fff; font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #toolbar button.done { background: #30d158; color: #fff; border-color: #30d158; }
+</style>
+<script src="mermaid.min.js"></script>
+</head>
+<body>
+  <div id="toolbar">
+    <button id="zoomOut" title="축소 (⌘−)">−</button>
+    <span id="zoomLabel">100%</span>
+    <button id="zoomIn" title="확대 (⌘+)">+</button>
+    <button id="zoomReset" class="text" title="원래대로 (⌘0)">리셋</button>
+    <span class="spacer"></span>
+    <button id="srcBtn" class="text" title="선택한 텍스트(소스) 보기">&lt;/&gt; 소스</button>
+    <button id="saveBtn" class="text" title="PNG 파일로 저장 (⌘S)">Save PNG</button>
+    <button id="copyBtn" class="text" title="이미지 복사 (⌘C)">Copy PNG</button>
+  </div>
+
+  <div id="stage">
+    <div id="content"><div id="diagram"></div></div>
+  </div>
+
+  <div id="state">
+    <div class="glyph"></div>
+    <div class="title"></div>
+    <div class="subtitle"></div>
+    <div class="detail"></div>
+  </div>
+
+  <div id="source"><pre><code id="srcCode"></code></pre></div>
+
+  <div id="toast"><span class="ic">✓</span><span class="tx"></span></div>
+
+  <script>
+    var lastCode = "";
+    var currentTheme = "default";
+    var currentBg = "#ffffff";
+    var scale = 1, panX = 0, panY = 0;
+    var sourceOpen = false;
+
+    if (location.hash.indexOf('preview') !== -1) document.body.classList.add('preview');
+
+    // ── i18n (use "ko" when system language is Korean, otherwise "en") ──
+    var I18N = {
+      ko: {
+        reset: '리셋', source: '</> 소스', save: 'Save PNG', copy: 'Copy PNG',
+        emptyTitle: '표시할 다이어그램이 없어요', emptySub: '먼저 mermaid 텍스트를 선택(또는 복사)한 뒤 다시 시도하세요.',
+        errTitle: '다이어그램을 그릴 수 없어요', errSub: 'mermaid 문법 오류로 보입니다. 상단 “소스” 버튼으로 원문을 확인하세요.',
+        loadFail: 'mermaid.js 로드 실패', loadFailSub: 'mermaid.min.js 를 찾지 못했습니다.',
+        copied: '복사됨', saved: '저장됨', copyDone: '✓ 복사됨',
+        tipZoomOut: '축소 (⌘−)', tipZoomIn: '확대 (⌘+)', tipReset: '원래대로 (⌘0)',
+        tipSource: '선택한 텍스트(소스) 보기', tipSave: 'PNG 파일로 저장 (⌘S)', tipCopy: '이미지 복사 (⌘C)'
+      },
+      en: {
+        reset: 'Reset', source: '</> Source', save: 'Save PNG', copy: 'Copy PNG',
+        emptyTitle: 'Nothing to render', emptySub: 'Select (or copy) some mermaid text and try again.',
+        errTitle: 'Could not render the diagram', errSub: 'Looks like a mermaid syntax error. Use the “Source” button above to inspect.',
+        loadFail: 'Failed to load mermaid.js', loadFailSub: 'mermaid.min.js was not found.',
+        copied: 'Copied', saved: 'Saved', copyDone: '✓ Copied',
+        tipZoomOut: 'Zoom out (⌘−)', tipZoomIn: 'Zoom in (⌘+)', tipReset: 'Reset (⌘0)',
+        tipSource: 'Show source text', tipSave: 'Save as PNG (⌘S)', tipCopy: 'Copy image (⌘C)'
+      }
+    };
+    var L = I18N[((navigator.language || 'en').slice(0, 2) === 'ko') ? 'ko' : 'en'];
+    function applyI18n() {
+      var $ = function (id) { return document.getElementById(id); };
+      $('zoomOut').title = L.tipZoomOut;
+      $('zoomIn').title = L.tipZoomIn;
+      $('zoomReset').textContent = L.reset; $('zoomReset').title = L.tipReset;
+      $('srcBtn').textContent = L.source; $('srcBtn').title = L.tipSource;
+      $('saveBtn').textContent = L.save; $('saveBtn').title = L.tipSave;
+      $('copyBtn').textContent = L.copy; $('copyBtn').title = L.tipCopy;
+    }
+
+    function post(ok, info) {
+      try { window.webkit.messageHandlers.result.postMessage({ ok: ok, info: String(info) }); } catch (e) {}
+    }
+
+    function applyTransform() {
+      document.getElementById('content').style.transform =
+        'translate(' + panX + 'px,' + panY + 'px) scale(' + scale + ')';
+      document.getElementById('zoomLabel').textContent = Math.round(scale * 100) + '%';
+    }
+    function setScale(next, cx, cy) {
+      next = Math.min(8, Math.max(0.1, next));
+      var stage = document.getElementById('stage');
+      if (cx == null) { cx = stage.clientWidth / 2; cy = stage.clientHeight / 2; }
+      panX = cx - (cx - panX) * (next / scale);
+      panY = cy - (cy - panY) * (next / scale);
+      scale = next; applyTransform();
+    }
+    function centerContent() {
+      var stage = document.getElementById('stage');
+      var content = document.getElementById('content');
+      var sw = stage.clientWidth, sh = stage.clientHeight;
+      var cw = content.offsetWidth, ch = content.offsetHeight;
+      panX = (sw - cw * scale) / 2;
+      panY = (ch * scale <= sh) ? (sh - ch * scale) / 2 : 16;
+      applyTransform();
+    }
+    function resetView() { scale = 1; centerContent(); }
+
+    // empty/error state view (we render this instead of mermaid's default error screen)
+    function showState(glyph, title, subtitle, detail) {
+      document.getElementById('diagram').innerHTML = '';
+      document.getElementById('stage').style.display = 'none';
+      var s = document.getElementById('state');
+      s.style.display = 'flex';
+      s.querySelector('.glyph').textContent = glyph;
+      s.querySelector('.title').textContent = title;
+      s.querySelector('.subtitle').textContent = subtitle || '';
+      var d = s.querySelector('.detail');
+      if (detail) { d.style.display = 'block'; d.textContent = detail; }
+      else { d.style.display = 'none'; }
+    }
+    function hideState() {
+      document.getElementById('state').style.display = 'none';
+      document.getElementById('stage').style.display = '';
+    }
+
+    // clean up temporary/error nodes mermaid left in body (keep only #toolbar/#stage/#state/#source)
+    function cleanupOrphans() {
+      var keep = { 'toolbar': 1, 'stage': 1, 'state': 1, 'source': 1 };
+      Array.prototype.slice.call(document.body.children).forEach(function (el) {
+        if (el.tagName === 'SCRIPT') return;
+        if (!keep[el.id]) el.parentNode.removeChild(el);
+      });
+    }
+
+    async function doRender() {
+      cleanupOrphans();
+      if (!window.mermaid) { showState('⚠️', L.loadFail, L.loadFailSub); post(false, 'mermaid not loaded'); return; }
+      // pre-check: empty input → friendly empty state
+      if (!lastCode || !lastCode.trim()) {
+        showState('🪧', L.emptyTitle, L.emptySub);
+        post(false, 'empty input');
+        return;
+      }
+      try {
+        mermaid.initialize({ startOnLoad: false, theme: currentTheme, suppressErrorRendering: true, maxTextSize: 900000, maxEdges: 2000 });
+        var out = await mermaid.render('g' + Date.now(), lastCode);
+        hideState();
+        document.getElementById('diagram').innerHTML = out.svg;
+        cleanupOrphans();
+        centerContent();
+        post(true, 'svg length=' + out.svg.length);
+      } catch (e) {
+        cleanupOrphans();
+        var msg = (e && e.message) ? e.message : String(e);
+        showState('🚫', L.errTitle, L.errSub, msg);
+        post(false, msg);
+      }
+    }
+
+    function applyBackground(bg) {
+      var color = bg || '#ffffff';
+      currentBg = color;
+      document.documentElement.style.background = color;
+      document.body.style.background = color;
+    }
+
+    // extract only the diagram SVG at its natural size (Swift renders it offscreen and converts to PNG)
+    window.exportData = function () {
+      var svg = document.querySelector('#diagram svg');
+      if (!svg) return null;
+      var w = 0, h = 0;
+      if (svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width) {
+        w = svg.viewBox.baseVal.width; h = svg.viewBox.baseVal.height;
+      } else {
+        try { var b = svg.getBBox(); w = b.width; h = b.height; } catch (e) {}
+      }
+      if (!w || !h) { var r = svg.getBoundingClientRect(); w = r.width / scale; h = r.height / scale; }
+      var clone = svg.cloneNode(true);
+      clone.setAttribute('width', w);
+      clone.setAttribute('height', h);
+      clone.removeAttribute('style'); // remove max-width etc. → natural size
+      return JSON.stringify({ svg: new XMLSerializer().serializeToString(clone), w: w, h: h, bg: currentBg });
+    };
+
+    // ── source highlighting (lightweight, approximates mermaid syntax) ──
+    function escapeHtml(s) {
+      return s.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; });
+    }
+    function highlight(src) {
+      var h = escapeHtml(src);
+      h = h.replace(/(%%[^\n]*)/g, '<span class="c">$1</span>');
+      h = h.replace(/(--&gt;&gt;|--&gt;|-\.-&gt;|==&gt;|--x|--o|-&gt;&gt;|---|===|\.\.&gt;|::)/g, '<span class="op">$1</span>');
+      h = h.replace(/\b(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram-v2|stateDiagram|erDiagram|gantt|pie|journey|mindmap|gitGraph|timeline|quadrantChart|TD|TB|LR|RL|BT|participant|actor|loop|alt|opt|par|rect|critical|break|else|and|end|note|over|activate|deactivate|class|subgraph|direction|click|style|linkStyle|section)\b/g, '<span class="kw">$1</span>');
+      return h;
+    }
+    function renderSource() {
+      document.getElementById('srcCode').innerHTML = highlight(lastCode || '');
+    }
+    function toggleSource() {
+      sourceOpen = !sourceOpen;
+      document.getElementById('source').style.display = sourceOpen ? 'block' : 'none';
+      document.getElementById('srcBtn').classList.toggle('on', sourceOpen);
+      if (sourceOpen) renderSource();
+    }
+
+    // Swift entry point
+    window.render = function (code, theme, zoomPercent, bg) {
+      lastCode = code || "";
+      currentTheme = theme || "default";
+      applyBackground(bg);
+      scale = (zoomPercent && zoomPercent > 0) ? (zoomPercent / 100) : 1;
+      applyTransform();
+      if (sourceOpen) renderSource();
+      doRender();
+    };
+
+    // toolbar
+    document.getElementById('zoomIn').onclick = function () { setScale(scale * 1.2); };
+    document.getElementById('zoomOut').onclick = function () { setScale(scale / 1.2); };
+    document.getElementById('zoomReset').onclick = resetView;
+    document.getElementById('srcBtn').onclick = toggleSource;
+    // Actual copy/save completion is signaled by Swift via callbacks (window.copied/saved) — no optimistic display
+    function doCopy() { try { window.webkit.messageHandlers.copyPNG.postMessage({}); } catch (e) {} }
+    function doSave() { try { window.webkit.messageHandlers.savePNG.postMessage({}); } catch (e) {} }
+    document.getElementById('copyBtn').onclick = doCopy;
+    document.getElementById('saveBtn').onclick = doSave;
+
+    var toastTimer = null;
+    function showToast(text) {
+      var t = document.getElementById('toast');
+      t.querySelector('.tx').textContent = text;
+      t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () { t.classList.remove('show'); }, 1100);
+    }
+    function flashButton(id, label) {
+      var b = document.getElementById(id), prev = b.textContent;
+      b.classList.add('done'); b.textContent = label;
+      setTimeout(function () { b.classList.remove('done'); b.textContent = prev; }, 1200);
+    }
+    // Swift completion callbacks
+    window.copied = function () { flashButton('copyBtn', L.copyDone); showToast(L.copied); };
+    window.saved  = function () { showToast(L.saved); };
+
+    applyI18n();
+
+    // keyboard shortcuts (zoom / copy / save)
+    window.addEventListener('keydown', function (e) {
+      if (!e.metaKey) return;
+      if (e.key === '=' || e.key === '+') { setScale(scale * 1.2); e.preventDefault(); }
+      else if (e.key === '-') { setScale(scale / 1.2); e.preventDefault(); }
+      else if (e.key === '0') { resetView(); e.preventDefault(); }
+      else if (e.key === 's') { e.preventDefault(); doSave(); }
+      else if (e.key === 'c') {
+        // if there is a text selection, let the browser copy that text; only copy PNG when nothing is selected
+        var sel = window.getSelection ? String(window.getSelection()) : '';
+        if (!sel) { e.preventDefault(); doCopy(); }
+      }
+    });
+    // ⌘/Ctrl + wheel zoom
+    var stage = document.getElementById('stage');
+    stage.addEventListener('wheel', function (e) {
+      if (e.metaKey || e.ctrlKey) {
+        e.preventDefault();
+        var r = stage.getBoundingClientRect();
+        setScale(scale * (e.deltaY < 0 ? 1.1 : 0.9), e.clientX - r.left, e.clientY - r.top);
+      }
+    }, { passive: false });
+    // trackpad pinch
+    var gestureBase = 1;
+    stage.addEventListener('gesturestart', function (e) { e.preventDefault(); gestureBase = scale; });
+    stage.addEventListener('gesturechange', function (e) { e.preventDefault(); setScale(gestureBase * e.scale); });
+    // drag pan
+    var dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+    stage.addEventListener('mousedown', function (e) {
+      dragging = true; sx = e.clientX; sy = e.clientY; ox = panX; oy = panY;
+      stage.classList.add('panning');
+    });
+    window.addEventListener('mousemove', function (e) {
+      if (!dragging) return;
+      panX = ox + (e.clientX - sx); panY = oy + (e.clientY - sy); applyTransform();
+    });
+    window.addEventListener('mouseup', function () { dragging = false; stage.classList.remove('panning'); });
+  </script>
+</body>
+</html>

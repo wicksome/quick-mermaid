@@ -1,0 +1,88 @@
+name: Release
+
+# 수동 실행: Actions 탭 → Release → Run workflow
+# bump(patch/minor/major)로 최신 태그에서 자동 증가하거나, version 을 직접 지정.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "버전 증가 단위 (version 미지정 시 사용)"
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      version:
+        description: "버전 직접 지정 (예: 1.2.0). 비우면 bump 로 자동 계산"
+        type: string
+        required: false
+
+permissions:
+  contents: write   # 커밋/태그 푸시 + 릴리스 생성
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 태그 기반 버전 계산을 위해 전체 히스토리
+
+      - name: 버전 결정
+        id: ver
+        run: |
+          set -euo pipefail
+          IN="${{ inputs.version }}"
+          if [ -n "$IN" ]; then
+            VER="$IN"
+          else
+            latest=$(git tag --list 'v*' --sort=-v:refname | head -1)
+            latest="${latest#v}"; [ -z "$latest" ] && latest="0.0.0"
+            IFS=. read -r MA MI PA <<< "$latest"
+            case "${{ inputs.bump }}" in
+              major) MA=$((MA+1)); MI=0; PA=0;;
+              minor) MI=$((MI+1)); PA=0;;
+              *)     PA=$((PA+1));;
+            esac
+            VER="$MA.$MI.$PA"
+          fi
+          if ! [[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "invalid version: $VER" >&2; exit 1
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VER" >> "$GITHUB_OUTPUT"
+          echo "==> release version: $VER"
+
+      - name: Info.plist 버전 주입
+        run: |
+          set -euo pipefail
+          V="${{ steps.ver.outputs.version }}"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $V" Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $V" Info.plist
+
+      - name: dmg 빌드
+        run: |
+          set -euo pipefail
+          chmod +x build.sh
+          ./build.sh --dmg
+          mv -f QuickMermaid.dmg "QuickMermaid-${{ steps.ver.outputs.version }}.dmg"
+
+      - name: 버전 커밋 + 태그 푸시
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Info.plist
+          git commit -m "🔖 Release ${{ steps.ver.outputs.tag }} [skip ci]"
+          git tag "${{ steps.ver.outputs.tag }}"
+          git push origin HEAD:${{ github.ref_name }}
+          git push origin "${{ steps.ver.outputs.tag }}"
+
+      - name: GitHub Release 생성 + dmg 업로드
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release create "${{ steps.ver.outputs.tag }}" \
+            "QuickMermaid-${{ steps.ver.outputs.version }}.dmg" \
+            --title "QuickMermaid ${{ steps.ver.outputs.version }}" \
+            --generate-notes
