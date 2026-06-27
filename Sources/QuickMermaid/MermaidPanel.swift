@@ -8,6 +8,11 @@ final class QuickPanel: NSPanel {
     override func cancelOperation(_ sender: Any?) { close() }
 }
 
+/// JS → Swift message channels. Names must match `webkit.messageHandlers.*` in renderer.html.
+private enum ScriptMessage: String, CaseIterable {
+    case result, copyPNG, savePNG, openSettings, testResult, deleteHistory
+}
+
 /// Renders mermaid text in a WKWebView and displays it in a floating panel.
 /// A single panel/webview is reused (not released when closed).
 final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMessageHandler, NSWindowDelegate {
@@ -21,10 +26,7 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
     private var pendingTest = false
     private var testCompletion: ((String) -> Void)?
 
-    // Used when exporting only the diagram as PNG via offscreen rendering
-    private var exportWindow: NSWindow?
-    private var exportWebView: WKWebView?
-    private var exportCompletion: ((NSImage?) -> Void)?
+    private let exporter = DiagramExporter()
 
     /// Called when the panel is closed (e.g., quit the app in CLI single-use viewer mode). Ignored if nil.
     var onClose: (() -> Void)?
@@ -83,12 +85,7 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
         if panel != nil { return }
 
         let config = WKWebViewConfiguration()
-        config.userContentController.add(self, name: "result")
-        config.userContentController.add(self, name: "copyPNG")
-        config.userContentController.add(self, name: "savePNG")
-        config.userContentController.add(self, name: "openSettings")
-        config.userContentController.add(self, name: "testResult")
-        config.userContentController.add(self, name: "deleteHistory")
+        ScriptMessage.allCases.forEach { config.userContentController.add(self, name: $0.rawValue) }
         let frame = NSRect(x: 0, y: 0, width: 900, height: 700)
         webView = WKWebView(frame: frame, configuration: config)
         webView.navigationDelegate = self
@@ -198,10 +195,10 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
         return t.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    // MARK: - Copy / Save PNG (offscreen render of diagram only)
+    // MARK: - Copy / Save PNG (delegated to DiagramExporter — diagram only)
 
     private func copyPNG() {
-        exportImage { [weak self] image in
+        exporter.export(from: webView) { [weak self] image in
             guard let image else { return }
             let pb = NSPasteboard.general
             pb.clearContents()
@@ -211,8 +208,8 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
     }
 
     private func savePNG() {
-        exportImage { [weak self] image in
-            guard let image, let data = Self.pngData(from: image) else { return }
+        exporter.export(from: webView) { [weak self] image in
+            guard let image, let data = DiagramExporter.pngData(from: image) else { return }
             let save = NSSavePanel()
             save.allowedContentTypes = [.png]
             save.nameFieldStringValue = "diagram.png"
@@ -227,82 +224,9 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
         }
     }
 
-    /// Extracts only the current diagram's SVG at its natural size, renders it alone in an offscreen WebView, then takes a snapshot.
-    /// → Captures only the diagram, without toolbar or margins, regardless of the current screen zoom.
-    private func exportImage(completion: @escaping (NSImage?) -> Void) {
-        // One export at a time: ignore re-entrant calls while one is in flight.
-        guard exportCompletion == nil, exportWebView == nil else { return }
-        webView.evaluateJavaScript("window.exportData()") { [weak self] result, _ in
-            guard let self else { completion(nil); return }
-            guard let json = result as? String,
-                  let data = json.data(using: .utf8),
-                  let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let svg = dict["svg"] as? String,
-                  let w = dict["w"] as? Double, let h = dict["h"] as? Double,
-                  w > 1, h > 1 else { completion(nil); return }
-            let bg = (dict["bg"] as? String) ?? "#ffffff"
-            self.renderSVGOffscreen(svg: svg, w: w, h: h, bg: bg, completion: completion)
-        }
-    }
-
-    private func renderSVGOffscreen(svg: String, w: Double, h: Double, bg: String,
-                                    completion: @escaping (NSImage?) -> Void) {
-        // Render at 2x for sharpness, but cap the longest edge (to avoid snapshot/canvas limits)
-        let maxDim = 8192.0
-        var s = 2.0
-        if max(w, h) * s > maxDim { s = max(1.0, maxDim / max(w, h)) }
-        let pw = w * s, ph = h * s
-        let html = """
-        <!doctype html><html><head><meta charset='utf-8'><style>
-        html,body{margin:0;padding:0;background:\(bg);}
-        svg{display:block;width:\(pw)px;height:\(ph)px;}
-        </style></head><body>\(svg)</body></html>
-        """
-        let frame = NSRect(x: 0, y: 0, width: pw, height: ph)
-        let wv = WKWebView(frame: frame)
-        wv.navigationDelegate = self
-        // Place in an offscreen window to secure a backing store (snapshot stability)
-        let win = NSWindow(contentRect: NSRect(x: -30000, y: -30000, width: pw, height: ph),
-                           styleMask: [.borderless], backing: .buffered, defer: false)
-        win.contentView = wv
-        self.exportWindow = win
-        self.exportWebView = wv
-        self.exportCompletion = completion
-        wv.loadHTMLString(html, baseURL: Bundle.main.resourceURL)
-        // Safety: if the offscreen load never finishes, don't hang/leak.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
-            guard let self, self.exportWebView === wv, self.exportCompletion != nil else { return }
-            self.finishExport(nil)
-        }
-    }
-
-    private func finishExport(_ image: NSImage?) {
-        let done = exportCompletion
-        exportCompletion = nil
-        exportWebView = nil
-        exportWindow = nil
-        done?(image)
-    }
-
-    private static func pngData(from image: NSImage) -> Data? {
-        guard let tiff = image.tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiff) else { return nil }
-        return rep.representation(using: .png, properties: [:])
-    }
-
     // MARK: - WKNavigationDelegate
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        if webView === exportWebView {
-            // Take the snapshot on the next run-loop iteration for render stability
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                guard let self, let wv = self.exportWebView else { return }
-                wv.takeSnapshot(with: WKSnapshotConfiguration()) { image, _ in
-                    self.finishExport(image)
-                }
-            }
-            return
-        }
         if pendingTest {
             pendingTest = false
             // __test runs async and posts its summary back via the "testResult" handler.
@@ -314,28 +238,27 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        if webView === exportWebView { finishExport(nil); return }
         deliverResult(false, "navigation failed: \(error.localizedDescription)")
     }
 
     // MARK: - WKScriptMessageHandler
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        switch message.name {
-        case "copyPNG":
+        switch ScriptMessage(rawValue: message.name) {
+        case .copyPNG:
             copyPNG()
-        case "savePNG":
+        case .savePNG:
             savePNG()
-        case "openSettings":
+        case .openSettings:
             ignoreResignOnce = true   // opening Settings steals key focus; don't auto-close the panel
             onOpenSettings?()
-        case "testResult":
+        case .testResult:
             let c = testCompletion
             testCompletion = nil
             c?(message.body as? String ?? "{\"failed\":[\"no body\"]}")
-        case "deleteHistory":
+        case .deleteHistory:
             if let code = message.body as? String { History.remove(code); injectHistory() }
-        case "result":
+        case .result:
             let dict = message.body as? [String: Any]
             let ok = (dict?["ok"] as? Bool) ?? false
             let info = (dict?["info"] as? String) ?? ""
@@ -346,7 +269,7 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
                 History.add(code)
                 injectHistory()
             }
-        default:
+        case .none:
             break
         }
     }
