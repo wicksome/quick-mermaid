@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 
 /// User settings. Stored in UserDefaults(standard) and shared between the resident app and CLI instances.
 /// (All instances run under the same bundle id `me.wickso.quickmermaid`, so they share the same domain.)
@@ -92,5 +93,25 @@ enum Settings {
     static var shortcutDisplay: String {
         get { d.string(forKey: kShortcutDisplay) ?? "⌃⌘M" }
         set { d.set(newValue, forKey: kShortcutDisplay) }
+    }
+
+    // MARK: - Launch at login
+
+    /// Whether the app is registered to start at login (macOS 13+ `SMAppService`).
+    /// The source of truth is the service registration itself, not UserDefaults, so
+    /// it stays correct even if the user toggles the system Login Items list directly.
+    static var launchAtLogin: Bool {
+        get { SMAppService.mainApp.status == .enabled }
+        set {
+            do {
+                if newValue {
+                    if SMAppService.mainApp.status != .enabled { try SMAppService.mainApp.register() }
+                } else {
+                    if SMAppService.mainApp.status == .enabled { try SMAppService.mainApp.unregister() }
+                }
+            } catch {
+                NSLog("QuickMermaid: launchAtLogin toggle failed: \(error.localizedDescription)")
+            }
+        }
     }
 }

@@ -39,7 +39,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self, selector: #selector(settingsChanged),
                 name: NSNotification.Name(Settings.changedNotification), object: nil)
             checkForUpdate()
+            // Opening the app (Finder/Dock) surfaces Settings, since the app has no
+            // main window otherwise. Suppressed for the silent login launch: when
+            // launch-at-login is on, a cold launch is the one the system did at
+            // login. A manual re-launch while running goes through reopen below.
+            if !Settings.launchAtLogin { openSettings() }
         }
+    }
+
+    /// Re-opening the app (double-click / Dock) while it's already running surfaces Settings.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if case .service = mode { openSettings() }
+        return true
     }
 
     private static var appVersion: String {
