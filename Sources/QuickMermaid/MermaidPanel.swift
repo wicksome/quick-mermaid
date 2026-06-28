@@ -260,7 +260,7 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
                 deliverResult(ok, info)
             } else if ok, let code = dict?["code"] as? String {
                 // Record only successful renders; re-inject so the history overlay reflects it.
-                History.add(code)
+                History.add(code, engine: dict?["engine"] as? String)
                 injectHistory()
             }
         case .none:

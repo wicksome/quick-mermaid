@@ -258,7 +258,7 @@
     }
 
     function post(ok, info) {
-      try { window.webkit.messageHandlers.result.postMessage({ ok: ok, info: String(info), code: lastCode }); } catch (e) {}
+      try { window.webkit.messageHandlers.result.postMessage({ ok: ok, info: String(info), code: lastCode, engine: activeEngine }); } catch (e) {}
     }
 
     function applyTransform() {
@@ -320,13 +320,17 @@
     function now() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
 
     // toolbar readout: which engine drew the current diagram + how long it took.
-    function setMeta(engine, ms) {
+    // Remembered so it can be hidden behind an overlay and restored on return; it
+    // describes the diagram, so it's only shown in the diagram view.
+    var metaEngine = null, metaMs = 0;
+    function setMeta(engine, ms) { metaEngine = engine; metaMs = ms || 0; refreshMeta(); }
+    function refreshMeta() {
       var el = document.getElementById('meta');
-      if (!engine) { el.classList.remove('show'); return; }
+      if (!metaEngine || sourceOpen || historyOpen) { el.classList.remove('show'); return; }
       var eng = el.querySelector('.eng');
-      eng.textContent = engine === 'plantuml' ? 'PlantUML' : 'Mermaid';
-      eng.className = 'eng ' + (engine === 'plantuml' ? 'puml' : 'mmd');
-      el.querySelector('.ms').textContent = ms >= 1000 ? (ms / 1000).toFixed(1) + ' s' : Math.round(ms) + ' ms';
+      eng.textContent = metaEngine === 'plantuml' ? 'PlantUML' : 'Mermaid';
+      eng.className = 'eng ' + (metaEngine === 'plantuml' ? 'puml' : 'mmd');
+      el.querySelector('.ms').textContent = metaMs >= 1000 ? (metaMs / 1000).toFixed(1) + ' s' : Math.round(metaMs) + ' ms';
       el.classList.add('show');
     }
 
@@ -478,6 +482,9 @@
       var engine = pendingEngine; pendingEngine = null;
       if (!engine) engine = isPlantUML(lastCode) ? 'plantuml' : 'mermaid';
       activeEngine = engine;
+      // Gate exports + the readout while this render is in flight: the previous diagram
+      // is no longer what's about to be shown, so copy/save/meta must not point at it.
+      rendered = false; setMeta(null); updateExportButtons();
       if (engine === 'plantuml') { return doRenderPlantUML(); }
       if (!window.mermaid) { showState('⚠️', L.loadFail, L.loadFailSub); post(false, 'mermaid not loaded'); return; }
       try {
@@ -577,6 +584,12 @@
       return '(empty)';
     }
     function itemCode(it) { return (it && typeof it === 'object') ? (it.code || '') : (it || ''); }
+    // Engine for a history item: prefer the persisted engine (survives fenced detection),
+    // fall back to content detection for older entries that predate the stored field.
+    function itemEngine(it) {
+      if (it && typeof it === 'object' && it.engine) return it.engine;
+      return isPlantUML(itemCode(it)) ? 'plantuml' : 'mermaid';
+    }
     function dateKey(ts) {
       var d = ts ? new Date(ts * 1000) : new Date();
       return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
@@ -603,8 +616,9 @@
         var k = dateKey(ts);
         if (k !== lastKey) { html += '<div class="ghdr">' + escapeHtml(dateLabel(ts)) + '</div>'; lastKey = k; }
         var oneLine = code.replace(/\s+/g, ' ').trim();
-        var engCls = isPlantUML(code) ? 'puml' : 'mmd';
-        var engName = isPlantUML(code) ? 'PlantUML' : 'Mermaid';
+        var eng = itemEngine(it);
+        var engCls = eng === 'plantuml' ? 'puml' : 'mmd';
+        var engName = eng === 'plantuml' ? 'PlantUML' : 'Mermaid';
         html += '<div class="item" data-i="' + i + '">'
               + '<div class="thumb ph" data-i="' + i + '">…</div>'
               + '<div class="meta"><div class="t">' + escapeHtml(firstLine(code)) + '</div>'
@@ -651,11 +665,12 @@
       for (var i = 0; i < boxes.length; i++) {
         if (gen !== thumbGen) return;   // a newer renderHistory() superseded us
         var box = boxes[i];
-        var code = itemCode(historyItems[parseInt(box.getAttribute('data-i'), 10)]);
+        var hit = historyItems[parseInt(box.getAttribute('data-i'), 10)];
+        var code = itemCode(hit);
         if (!code || !code.trim()) { setThumbPlaceholder(box, '⌗'); continue; }
         // PlantUML history items render offscreen via the engine (cached by code like
         // the Mermaid path); a failure falls back to a neutral marker.
-        if (isPlantUML(code)) {
+        if (itemEngine(hit) === 'plantuml') {
           if (thumbCache[code] !== undefined) {
             if (thumbCache[code]) fillThumb(box, thumbCache[code]); else setThumbPlaceholder(box, '🌿');
             continue;
@@ -707,7 +722,9 @@
     }
     function loadFromHistory(i) {
       if (i < 0 || i >= historyItems.length) return;
-      lastCode = itemCode(historyItems[i]);
+      var it = historyItems[i];
+      lastCode = itemCode(it);
+      pendingEngine = itemEngine(it);   // route by the stored engine, not re-detected content
       closeHistory();
       if (sourceOpen) renderSource();
       doRender();
@@ -757,6 +774,7 @@
       document.getElementById('zoomIn').disabled = zoomOff;
       document.getElementById('zoomOut').disabled = zoomOff;
       document.getElementById('zoomReset').disabled = zoomOff;
+      refreshMeta();   // the engine/time readout describes the diagram → hidden behind an overlay
     }
     // Actual copy/save completion is signaled by Swift via callbacks (window.copied/saved) — no optimistic display
     var __onCopy = null;   // test seam: lets the test suite observe copies without the native side effect
@@ -932,6 +950,30 @@
       window.render('graph TD\n  M-->N', 'default', 100, '#fff', 'en');
       await new Promise(function (r) { setTimeout(r, 300); });
       ok('render.closesOverlay', $('history').style.display === 'none' && $('state').style.display !== 'flex');
+
+      // in-flight render gates exports: rendered is false (copy disabled) until it lands
+      lastCode = 'graph TD\n  A-->B'; pendingEngine = null;
+      var rp = doRender();
+      ok('render.inflight.gated', rendered === false && $('copyBtn').disabled === true);
+      await rp;
+      ok('render.inflight.cleared', rendered === true && $('copyBtn').disabled === false);
+
+      // #meta (engine/time) is shown on the diagram, hidden behind an overlay, restored on return
+      ok('meta.shown.diagram', $('meta').classList.contains('show'));
+      toggleHistory();
+      ok('meta.hidden.overlay', $('meta').classList.contains('show') === false);
+      toggleHistory();
+      ok('meta.restored.diagram', $('meta').classList.contains('show'));
+
+      // history persists the engine: a PlantUML item whose body has no @start still
+      // re-renders as PlantUML (content detection alone would mis-route it to Mermaid)
+      thumbCache = {};
+      setHistory([{ code: 'class A\nclass B\nA --> B', ts: Date.now() / 1000, engine: 'plantuml' }]);
+      toggleHistory();
+      ok('history.engine.label.persisted', $('history').querySelector('.eng.puml') !== null);
+      loadFromHistory(0);
+      await new Promise(function (r) { setTimeout(r, 1500); });
+      ok('history.engine.route.persisted', activeEngine === 'plantuml' && $('diagram').querySelectorAll('svg').length === 1);
 
       // ⌘C echo guard: a synthesized ⌘C right after open must NOT copy the diagram;
       // once the guard window elapses, a deliberate ⌘C does.
