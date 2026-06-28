@@ -70,12 +70,19 @@ Select Mermaid text in any app that exposes selections to macOS Services
 
 ### C) Global shortcut
 
-Enable it in **Settings** (default `⌃⌘M`). With the shortcut on, select text in
-any app and press it — QuickMermaid copies the selection and renders it. This
+Enable it in **Settings** (default `⌃⌘M`). With the shortcut on, press it to
+render — QuickMermaid uses the current **selection** (it copies it for you), or
+falls back to whatever is on the **clipboard** when nothing is selected. This
 works everywhere, including Chrome.
 
 > The shortcut grabs the selection by synthesizing `⌘C`, which requires
 > **Accessibility** permission (macOS prompts you when you enable it).
+>
+> The app is unsigned, so **every update is a new binary and macOS drops the
+> previous grant.** After updating, re-allow QuickMermaid under **System Settings
+> → Privacy & Security → Accessibility** (toggle it off/on, or remove and re-add
+> it). Until you do, the shortcut still renders the clipboard but can't grab
+> selections.
 
 ### In the panel
 
