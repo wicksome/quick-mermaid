@@ -381,11 +381,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
         updatePreview()
     }
     @objc private func fontChanged() {
+        // Like theme/background, the font is re-read on the panel's next render — no
+        // notification needed (the settings-changed notification only re-registers the hotkey).
         Settings.fontFamily = (fontPopup.selectedItem?.representedObject as? String) ?? "default"
         updatePreview()
-        // Inform the resident app so an open panel re-reads the font on its next render.
-        DistributedNotificationCenter.default().postNotificationName(
-            NSNotification.Name(Settings.changedNotification), object: nil, userInfo: nil, deliverImmediately: true)
     }
     @objc private func zoomFieldChanged() {
         let v = max(10, min(800, zoomField.integerValue))

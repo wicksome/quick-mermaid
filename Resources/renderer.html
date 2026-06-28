@@ -1110,7 +1110,8 @@
       // "default" leaves Mermaid's own font (no injected family of ours)
       window.render('graph TD\n  A-->B', 'default', 100, '#fff', 'en', 'default');
       await new Promise(function (r) { setTimeout(r, 300); });
-      ok('font.mermaid.default', currentFont === 'default');
+      ok('font.mermaid.default', currentFont === 'default'
+        && $('diagram').innerHTML.indexOf('"default"') === -1);   // the literal "default" must never pass through as a font
 
       // PlantUML: source view shows the ORIGINAL — the injected skinparam must not leak
       window.render('@startuml\nclass A\nclass B\nA --> B\n@enduml', 'default', 100, '#fff', 'en', 'Courier New');
