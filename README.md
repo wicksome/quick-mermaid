@@ -28,7 +28,7 @@ Services, or pipe via CLI) → diagram. Think Quick Look, not Preview.app.
 - **Themes & background** — pick a Mermaid theme and a canvas background color.
 - **Source view** — toggle the original Mermaid text with syntax highlighting.
 - **PNG export** — copy (`⌘C`) or save (`⌘S`) the **diagram only** (no toolbar, full size even off-screen).
-- **PlantUML too** *(bonus)* — source that starts with `@startuml…@enduml` (and other `@start…` diagrams) is auto-detected and rendered by a vendored offline PlantUML engine. Mermaid stays the primary focus.
+- **PlantUML too** — source that starts with `@startuml…@enduml` (and other `@start…` diagrams) is auto-detected and rendered by a vendored offline PlantUML engine. Mermaid stays the primary focus.
 - **Offline** — Mermaid and the PlantUML engine are vendored; no network required.
 
 ## Install

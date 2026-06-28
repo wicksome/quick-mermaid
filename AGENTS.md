@@ -8,9 +8,9 @@ about. Read this before making changes.
 
 A macOS menu-bar app that renders selected/clipboard/piped **Mermaid source text**
 into a diagram in a floating quick-look panel. It is a *viewer*, not an editor.
-As a **bonus**, it also renders **PlantUML** (`@startuml…@enduml` and other
-`@start…` diagrams), auto-detected and routed to a vendored offline PlantUML
-engine. Mermaid remains the primary focus — this is not a PlantUML tool.
+It also renders **PlantUML** (`@startuml…@enduml` and other `@start…` diagrams),
+auto-detected and routed to a vendored offline PlantUML engine. Mermaid remains
+the primary focus — this is not a PlantUML tool.
 See `README.md` for user-facing docs and `docs/specs/` for design notes.
 
 ## Core principles
@@ -167,6 +167,11 @@ to upstream. To update:
   shortcut is the universal trigger.
 - **Global shortcut needs Accessibility permission** (it synthesizes ⌘C to grab
   the selection). The app prompts when the shortcut is enabled.
+- **The selection-grab ⌘C can echo into the panel.** On a reused panel, the ⌘C
+  synthesized by the shortcut may be delivered to our own WebView and would trigger
+  the ⌘C-copies-PNG handler (auto-copying the diagram). `renderer.html` guards this
+  by ignoring keyboard ⌘C for ~600ms after each `window.render` (`suppressKeyCopyUntil`);
+  the copy button and a deliberate later ⌘C are unaffected.
 - **Unsigned / ad-hoc signed.** Gatekeeper warns on first launch; document the
   `xattr -dr com.apple.quarantine` / right-click-open workaround. Full
   auto-update (Sparkle) is out of scope unless signing/notarization is added.
