@@ -202,6 +202,7 @@
     var rendered = false;    // true only when a diagram is currently shown (not empty/error state)
     var renderSeq = 0;       // unique mermaid render id counter (avoids id collisions on rapid renders)
     var historyItems = [];   // recent diagram sources (most recent first), injected by Swift
+    var suppressKeyCopyUntil = 0;   // ignore keyboard ⌘C until this time (blocks the selection-grab ⌘C echo right after open)
 
     if (location.hash.indexOf('preview') !== -1) document.body.classList.add('preview');
 
@@ -701,6 +702,10 @@
     // (```mermaid / ```puml / ```plantuml / plain ```); strip it and route by the
     // fence language, then by content.
     window.render = function (code, theme, zoomPercent, bg, lang) {
+      // The global shortcut grabs the selection by synthesizing ⌘C; on a reused panel
+      // that synthetic keypress can land in this WebView and trigger the ⌘C-copies-PNG
+      // handler. Ignore keyboard ⌘C briefly after each open so that echo can't fire it.
+      suppressKeyCopyUntil = now() + 600;
       var parsed = stripFence(code || "");
       lastCode = parsed.body;
       pendingEngine = detectEngine(parsed.lang, parsed.body);
@@ -730,7 +735,15 @@
       document.getElementById('saveBtn').disabled = dis;
     }
     // Actual copy/save completion is signaled by Swift via callbacks (window.copied/saved) — no optimistic display
-    function doCopy() { if (exportBlocked()) return; try { window.webkit.messageHandlers.copyPNG.postMessage({}); } catch (e) {} }
+    var __onCopy = null;   // test seam: lets the test suite observe copies without the native side effect
+    function doCopy() {
+      if (exportBlocked()) return;
+      if (__onCopy) { __onCopy(); return; }
+      try { window.webkit.messageHandlers.copyPNG.postMessage({}); } catch (e) {}
+    }
+    // ⌘C from the keyboard: ignored briefly after open so the selection-grab ⌘C echo
+    // (synthesized by the global shortcut) can't auto-copy the diagram.
+    function keyboardCopy() { if (now() < suppressKeyCopyUntil) return; doCopy(); }
     function doSave() { if (exportBlocked()) return; try { window.webkit.messageHandlers.savePNG.postMessage({}); } catch (e) {} }
     document.getElementById('copyBtn').onclick = doCopy;
     document.getElementById('saveBtn').onclick = doSave;
@@ -876,6 +889,18 @@
       await new Promise(function (r) { setTimeout(r, 300); });
       ok('render.closesOverlay', $('history').style.display === 'none' && $('state').style.display !== 'flex');
 
+      // ⌘C echo guard: a synthesized ⌘C right after open must NOT copy the diagram;
+      // once the guard window elapses, a deliberate ⌘C does.
+      var copies = 0; __onCopy = function () { copies++; };
+      window.render('graph TD\n  A-->B', 'default', 100, '#fff', 'en');
+      await new Promise(function (r) { setTimeout(r, 300); });   // rendered, still inside the 600ms guard
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', metaKey: true }));
+      ok('keycopy.suppressedAfterOpen', copies === 0);
+      suppressKeyCopyUntil = now() - 1;                          // simulate the guard window elapsing
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', metaKey: true }));
+      ok('keycopy.allowedLater', copies === 1);
+      __onCopy = null;
+
       } catch (err) {
         R.push({ name: 'EXCEPTION:' + (err && err.message ? err.message : String(err)), pass: false });
       }
@@ -900,7 +925,7 @@
       else if (e.key === 'c') {
         // if there is a text selection, let the browser copy that text; only copy PNG when nothing is selected
         var sel = window.getSelection ? String(window.getSelection()) : '';
-        if (!sel) { e.preventDefault(); doCopy(); }
+        if (!sel) { e.preventDefault(); keyboardCopy(); }
       }
     });
     // ⌘/Ctrl + wheel zoom
