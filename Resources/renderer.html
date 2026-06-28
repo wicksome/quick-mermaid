@@ -208,6 +208,7 @@
     var suppressKeyCopyUntil = 0;   // ignore keyboard ⌘C until this time (blocks the selection-grab ⌘C echo right after open)
     var activeEngine = 'mermaid';   // engine that drew the current diagram (drives source-view highlighting)
     var exportOverride = null;      // when set, exportData() returns this payload once (used by history-row image copy)
+    var currentFont = "default";   // diagram-text font family; "default" = each engine's built-in
 
     if (location.hash.indexOf('preview') !== -1) document.body.classList.add('preview');
 
@@ -381,6 +382,27 @@
       if (lang === 'mermaid' || lang === 'mmd') return 'mermaid';
       return isPlantUML(body) ? 'plantuml' : 'mermaid';
     }
+
+    // Diagram-level directives injected just after the @start… line of PlantUML source.
+    // A generalized seam: font is the first consumer; a future footer setting adds a line here.
+    function pumlPreamble(font) {
+      var lines = [];
+      if (font && font !== 'default') lines.push('skinparam defaultFontName "' + font + '"');
+      return lines;
+    }
+    // Insert `lines` right after the first @start… line. No @start → return code unchanged.
+    function injectAfterStart(code, lines) {
+      if (!lines || !lines.length) return code;
+      var src = code.split(/\r\n|\r|\n/);
+      for (var i = 0; i < src.length; i++) {
+        if (/^\s*@start\w+/i.test(src[i])) {
+          src.splice.apply(src, [i + 1, 0].concat(lines));
+          return src.join('\n');
+        }
+      }
+      return code;
+    }
+
     var pendingEngine = null;   // engine resolved by window.render (fence-aware); consumed once by doRender
 
     // The PlantUML engine (plantuml.js ~7.6MB + viz-global.js ~1.4MB) is loaded on
@@ -441,7 +463,7 @@
       tmp.style.cssText = 'position:absolute;left:-99999px;top:-99999px;visibility:hidden';
       document.getElementById('stage').appendChild(tmp);
       try {
-        var svg = await renderPlantUMLInto(tmp, code, false);
+        var svg = await renderPlantUMLInto(tmp, injectAfterStart(code, pumlPreamble(currentFont)), false);
         return svg ? svg.outerHTML : '';
       } catch (e) {
         return '';
@@ -466,7 +488,8 @@
         // (the engine is a black box — we can't suppress it like Mermaid's), so a
         // malformed diagram still resolves here rather than hitting the catch.
         var t0 = now();
-        var svg = await renderPlantUMLInto(document.getElementById('diagram'), lastCode, currentTheme === 'dark');
+        var pumlCode = injectAfterStart(lastCode, pumlPreamble(currentFont));
+        var svg = await renderPlantUMLInto(document.getElementById('diagram'), pumlCode, currentTheme === 'dark');
         var dt = now() - t0;
         hideState();
         cleanupOrphans();
@@ -503,7 +526,9 @@
       if (engine === 'plantuml') { return doRenderPlantUML(); }
       if (!window.mermaid) { showState('⚠️', L.loadFail, L.loadFailSub); post(false, 'mermaid not loaded'); return; }
       try {
-        mermaid.initialize({ startOnLoad: false, theme: currentTheme, suppressErrorRendering: true, maxTextSize: 900000, maxEdges: 2000 });
+        var mmInit = { startOnLoad: false, theme: currentTheme, suppressErrorRendering: true, maxTextSize: 900000, maxEdges: 2000 };
+        if (currentFont && currentFont !== 'default') mmInit.fontFamily = currentFont;
+        mermaid.initialize(mmInit);
         var t0 = now();
         var out = await mermaid.render('g' + (++renderSeq) + '_' + Date.now(), lastCode);
         var dt = now() - t0;
@@ -791,7 +816,7 @@
     // Swift entry point. `code` may be wrapped in a Markdown code fence
     // (```mermaid / ```puml / ```plantuml / plain ```); strip it and route by the
     // fence language, then by content.
-    window.render = function (code, theme, zoomPercent, bg, lang) {
+    window.render = function (code, theme, zoomPercent, bg, lang, font) {
       // The global shortcut grabs the selection by synthesizing ⌘C; on a reused panel
       // that synthetic keypress can land in this WebView and trigger the ⌘C-copies-PNG
       // handler. Ignore keyboard ⌘C briefly after each open so that echo can't fire it.
@@ -800,6 +825,7 @@
       lastCode = parsed.body;
       pendingEngine = detectEngine(parsed.lang, parsed.body);
       currentTheme = theme || "default";
+      currentFont = font || "default";
       applyBackground(bg);
       applyI18n(lang);
       // A fresh render always shows the diagram view — close any open overlay.
@@ -1064,6 +1090,35 @@
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', metaKey: true }));
       ok('keycopy.allowedLater', copies === 1);
       __onCopy = null;
+
+      // --- font setting ---
+      // pure helpers: preamble built from the font; "default" injects nothing
+      ok('font.preamble.named', JSON.stringify(pumlPreamble('Helvetica Neue')) === JSON.stringify(['skinparam defaultFontName "Helvetica Neue"']));
+      ok('font.preamble.default', JSON.stringify(pumlPreamble('default')) === '[]'
+        && JSON.stringify(pumlPreamble('')) === '[]');
+      ok('font.injectAfterStart', injectAfterStart('@startuml\nA->B\n@enduml', ['skinparam defaultFontName "X"'])
+        === '@startuml\nskinparam defaultFontName "X"\nA->B\n@enduml');
+      ok('font.injectAfterStart.noStart', injectAfterStart('class A\nA->B', ['skinparam defaultFontName "X"'])
+        === 'class A\nA->B');
+
+      // Mermaid integration: the chosen font reaches the rendered SVG
+      window.render('graph TD\n  A-->B', 'default', 100, '#fff', 'en', 'Courier New');
+      await new Promise(function (r) { setTimeout(r, 300); });
+      ok('font.mermaid.applied', $('diagram').innerHTML.indexOf('Courier New') !== -1);
+      ok('font.global.set', currentFont === 'Courier New');
+
+      // "default" leaves Mermaid's own font (no injected family of ours)
+      window.render('graph TD\n  A-->B', 'default', 100, '#fff', 'en', 'default');
+      await new Promise(function (r) { setTimeout(r, 300); });
+      ok('font.mermaid.default', currentFont === 'default');
+
+      // PlantUML: source view shows the ORIGINAL — the injected skinparam must not leak
+      window.render('@startuml\nclass A\nclass B\nA --> B\n@enduml', 'default', 100, '#fff', 'en', 'Courier New');
+      await new Promise(function (r) { setTimeout(r, 1500); });
+      toggleSource();
+      ok('font.puml.sourceClean', $('srcCode').textContent.indexOf('skinparam defaultFontName') === -1
+        && lastCode.indexOf('skinparam') === -1);
+      toggleSource();
 
       } catch (err) {
         R.push({ name: 'EXCEPTION:' + (err && err.message ? err.message : String(err)), pass: false });
