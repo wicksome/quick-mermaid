@@ -40,12 +40,17 @@ Scope: what happens once source text is being rendered/viewed. How text gets in
 ### Diagram view
 - Copy / Save export the **diagram image** (diagram only, full size regardless of zoom).
 - Zoom (buttons, shortcuts, wheel, pinch) acts on the diagram.
+- A **fit-to-window** control (and the **Space** key) re-fits the diagram to the current
+  window size — e.g. after the user enlarges the window. It's disabled/inactive in the
+  source and history views.
 
 ### History
 - Recently rendered diagrams are listed, each with a thumbnail, an engine label, and
   the original first line.
 - Reopening a history item renders it **exactly as it first rendered** — same engine,
   no failure, no relabeling.
+- On hover, a row offers **copying that diagram as an image** (and deleting it) — copying
+  stays in the history list, it does not navigate away.
 - The user can delete history items.
 
 ### Footprint
