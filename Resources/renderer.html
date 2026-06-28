@@ -128,14 +128,16 @@
   }
   #history .item .eng.mmd { color: #1a6fd0; background: #e8f1ff; }
   #history .item .eng.puml { color: #1f8a4c; background: #e7f7ee; }
-  #history .item .del {
+  #history .item .del, #history .item .hcopy {
     flex: none; width: 28px; height: 28px; padding: 0;
     border: none; background: none; color: #b0b0b5; cursor: pointer;
     display: none; align-items: center; justify-content: center; border-radius: 6px;
   }
-  #history .item .del svg { width: 15px; height: 15px; }
-  #history .item:hover .del { display: inline-flex; }
+  #history .item .del svg, #history .item .hcopy svg { width: 15px; height: 15px; }
+  #history .item:hover .del, #history .item:hover .hcopy { display: inline-flex; }
   #history .item .del:hover { background: #e3e3e6; color: #d11; }
+  #history .item .hcopy:hover { background: #e3e3e6; color: #007aff; }
+  #history .item .hcopy.done { color: #30d158; }
 
   /* toast (copy/save feedback) */
   #toast {
@@ -162,6 +164,7 @@
 </head>
 <body>
   <div id="toolbar">
+    <button id="zoomFit" title="Fit to window (Space)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>
     <button id="zoomOut" title="Zoom out (⌘−)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     <span id="zoomLabel">100%</span>
     <button id="zoomIn" title="Zoom in (⌘+)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
@@ -204,6 +207,7 @@
     var historyItems = [];   // recent diagram sources (most recent first), injected by Swift
     var suppressKeyCopyUntil = 0;   // ignore keyboard ⌘C until this time (blocks the selection-grab ⌘C echo right after open)
     var activeEngine = 'mermaid';   // engine that drew the current diagram (drives source-view highlighting)
+    var exportOverride = null;      // when set, exportData() returns this payload once (used by history-row image copy)
 
     if (location.hash.indexOf('preview') !== -1) document.body.classList.add('preview');
 
@@ -217,7 +221,7 @@
         pumlLoadFail: 'PlantUML 엔진 로드 실패', pumlLoadFailSub: 'plantuml.js / viz-global.js 를 찾지 못했습니다.',
         pumlLoading: 'PlantUML 엔진 준비 중…', pumlLoadingSub: '처음 한 번 엔진을 불러오는 중입니다.',
         copied: '복사됨', saved: '저장됨', copyDone: '✓ 복사됨',
-        tipZoomOut: '축소 (⌘−)', tipZoomIn: '확대 (⌘+)', tipReset: '맞춤 (⌘0)',
+        tipZoomOut: '축소 (⌘−)', tipZoomIn: '확대 (⌘+)', tipReset: '맞춤 (⌘0)', tipFit: '창에 맞춤 (Space)',
         tipHistory: '최근 다이어그램', tipSource: '소스 보기',
         tipSave: '이미지 저장 (⌘S)', tipCopy: '이미지 복사 (⌘C)', tipCopyCode: '코드 복사 (⌘C)',
         histEmpty: '최근 다이어그램이 없어요',
@@ -231,7 +235,7 @@
         pumlLoadFail: 'Failed to load the PlantUML engine', pumlLoadFailSub: 'plantuml.js / viz-global.js was not found.',
         pumlLoading: 'Preparing the PlantUML engine…', pumlLoadingSub: 'Loading the engine for the first time.',
         copied: 'Copied', saved: 'Saved', copyDone: '✓ Copied',
-        tipZoomOut: 'Zoom out (⌘−)', tipZoomIn: 'Zoom in (⌘+)', tipReset: 'Fit (⌘0)',
+        tipZoomOut: 'Zoom out (⌘−)', tipZoomIn: 'Zoom in (⌘+)', tipReset: 'Fit (⌘0)', tipFit: 'Fit to window (Space)',
         tipHistory: 'Recent diagrams', tipSource: 'Show source',
         tipSave: 'Save image (⌘S)', tipCopy: 'Copy image (⌘C)', tipCopyCode: 'Copy code (⌘C)',
         histEmpty: 'No recent diagrams',
@@ -250,6 +254,7 @@
       $('zoomOut').title = L.tipZoomOut;
       $('zoomIn').title = L.tipZoomIn;
       $('zoomReset').title = L.tipReset;
+      $('zoomFit').title = L.tipFit;
       $('histBtn').title = L.tipHistory;
       $('srcBtn').title = L.tipSource;
       $('saveBtn').title = L.tipSave;
@@ -295,6 +300,16 @@
       return Math.max(0.1, Math.min(s, 2.5));
     }
     function resetView() { scale = fitScale() * baseZoom; centerContent(); }
+    // Fit the diagram to the *current* window size (fills it, up to the max zoom) — for
+    // when the user resized the window and wants the diagram to match. Unlike resetView,
+    // not capped to the conservative open-size scale.
+    function fitView() {
+      var stage = document.getElementById('stage'), content = document.getElementById('content');
+      var sw = stage.clientWidth, sh = stage.clientHeight, cw = content.offsetWidth, ch = content.offsetHeight;
+      if (cw < 1 || ch < 1) return;
+      scale = Math.max(0.1, Math.min(8, Math.min(sw / cw, sh / ch)));
+      centerContent();
+    }
 
     // empty/error state view (we render this instead of mermaid's default error screen)
     function showState(glyph, title, subtitle, detail) {
@@ -517,8 +532,8 @@
     }
 
     // extract only the diagram SVG at its natural size (Swift renders it offscreen and converts to PNG)
-    window.exportData = function () {
-      var svg = document.querySelector('#diagram svg');
+    // Build the export payload ({svg,w,h,bg}) from an svg element at its natural size.
+    function svgPayload(svg) {
       if (!svg) return null;
       var w = 0, h = 0;
       if (svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width) {
@@ -526,12 +541,22 @@
       } else {
         try { var b = svg.getBBox(); w = b.width; h = b.height; } catch (e) {}
       }
+      if (!w || !h) {
+        w = parseFloat(svg.getAttribute('width')) || 0; h = parseFloat(svg.getAttribute('height')) || 0;
+      }
       if (!w || !h) { var r = svg.getBoundingClientRect(); w = r.width / scale; h = r.height / scale; }
+      if (!w || !h) return null;
       var clone = svg.cloneNode(true);
       clone.setAttribute('width', w);
       clone.setAttribute('height', h);
       clone.removeAttribute('style'); // remove max-width etc. → natural size
       return JSON.stringify({ svg: new XMLSerializer().serializeToString(clone), w: w, h: h, bg: currentBg });
+    }
+    // Swift reads this to rasterize the diagram to PNG. `exportOverride`, when set, is
+    // returned once instead of the on-screen diagram — used to copy a history row's image.
+    window.exportData = function () {
+      if (exportOverride) { var p = exportOverride; exportOverride = null; return p; }
+      return svgPayload(document.querySelector('#diagram svg'));
     };
 
     // ── source highlighting (lightweight, approximates mermaid syntax) ──
@@ -623,6 +648,9 @@
               + '<div class="thumb ph" data-i="' + i + '">…</div>'
               + '<div class="meta"><div class="t">' + escapeHtml(firstLine(code)) + '</div>'
               + '<div class="src"><span class="eng ' + engCls + '">' + engName + '</span>' + escapeHtml(oneLine) + '</div></div>'
+              + '<button class="hcopy" data-i="' + i + '" title="' + escapeHtml(L.copy) + '">'
+              + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+              + '</button>'
               + '<button class="del" data-i="' + i + '" title="' + escapeHtml(L.delete) + '">'
               + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
               + '</button></div>';
@@ -630,6 +658,9 @@
       el.innerHTML = html;
       Array.prototype.forEach.call(el.querySelectorAll('.item'), function (node) {
         node.onclick = function () { loadFromHistory(parseInt(node.getAttribute('data-i'), 10)); };
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('.hcopy'), function (btn) {
+        btn.onclick = function (ev) { ev.stopPropagation(); copyHistoryImage(parseInt(btn.getAttribute('data-i'), 10)); };
       });
       Array.prototype.forEach.call(el.querySelectorAll('.del'), function (btn) {
         btn.onclick = function (ev) { ev.stopPropagation(); deleteHistory(parseInt(btn.getAttribute('data-i'), 10)); };
@@ -729,6 +760,33 @@
       if (sourceOpen) renderSource();
       doRender();
     }
+    // Copy a history row's diagram as PNG without leaving the list: render its SVG
+    // (reuse the cached thumbnail svg when present), then hand it to the shared PNG
+    // exporter via exportOverride. Stays in the history view.
+    async function copyHistoryImage(i) {
+      if (i < 0 || i >= historyItems.length) return;
+      var it = historyItems[i], code = itemCode(it);
+      if (!code) return;
+      var svg = thumbCache[code];
+      if (!svg) {
+        try {
+          if (itemEngine(it) === 'plantuml') { await ensurePlantUML(); svg = await renderPlantUMLToString(code); }
+          else { var out = await mermaid.render('hc' + (++thumbSeq) + '_' + Date.now(), code); svg = out.svg; cleanupOrphans(); }
+          if (svg) thumbCache[code] = svg;
+        } catch (e) { svg = ''; }
+      }
+      if (!svg) return;   // can't render → nothing to copy
+      // attach offscreen (under #stage so cleanupOrphans won't prune it) so viewBox/getBBox resolve
+      var tmp = document.createElement('div');
+      tmp.style.cssText = 'position:absolute;left:-99999px;top:-99999px;visibility:hidden';
+      document.getElementById('stage').appendChild(tmp);
+      tmp.innerHTML = svg;
+      var payload = svgPayload(tmp.querySelector('svg'));
+      if (tmp.parentNode) tmp.parentNode.removeChild(tmp);
+      if (!payload) return;
+      exportOverride = payload;
+      requestPNGCopy();
+    }
 
     // Swift entry point. `code` may be wrapped in a Markdown code fence
     // (```mermaid / ```puml / ```plantuml / plain ```); strip it and route by the
@@ -756,6 +814,7 @@
     document.getElementById('zoomIn').onclick = function () { setScale(scale * 1.2); };
     document.getElementById('zoomOut').onclick = function () { setScale(scale / 1.2); };
     document.getElementById('zoomReset').onclick = resetView;
+    document.getElementById('zoomFit').onclick = fitView;
     document.getElementById('srcBtn').onclick = toggleSource;
     document.getElementById('histBtn').onclick = toggleHistory;
     // Toolbar buttons adapt to the active view:
@@ -774,6 +833,7 @@
       document.getElementById('zoomIn').disabled = zoomOff;
       document.getElementById('zoomOut').disabled = zoomOff;
       document.getElementById('zoomReset').disabled = zoomOff;
+      document.getElementById('zoomFit').disabled = zoomOff;
       refreshMeta();   // the engine/time readout describes the diagram → hidden behind an overlay
     }
     // Actual copy/save completion is signaled by Swift via callbacks (window.copied/saved) — no optimistic display
@@ -786,6 +846,10 @@
         return;
       }
       if (exportBlocked()) return;            // diagram view → copy the PNG
+      requestPNGCopy();
+    }
+    // Ask Swift to rasterize the current exportData() payload to PNG and copy it.
+    function requestPNGCopy() {
       if (__onCopy) { __onCopy('png'); return; }
       try { window.webkit.messageHandlers.copyPNG.postMessage({}); } catch (e) {}
     }
@@ -938,6 +1002,12 @@
         && thumbSvgs[0].getAttribute('preserveAspectRatio') === 'xMidYMid meet'
         && thumbSvgs[0].getAttribute('width') === '100%');
       ok('export.disabled.history', $('copyBtn').disabled === true && $('saveBtn').disabled === true);
+      // history row image-copy: builds the item's PNG payload and requests a copy, staying in the list
+      var hck = null; __onCopy = function (k) { hck = k; };
+      await copyHistoryImage(0);
+      ok('history.copyImage', hck === 'png' && typeof exportOverride === 'string' && exportOverride.indexOf('<svg') !== -1);
+      exportOverride = null; __onCopy = null;
+      ok('history.copyImage.staysInHistory', $('history').style.display === 'block');
       deleteHistory(1);
       ok('history.delete', $('history').querySelectorAll('.item').length === 1);
       loadFromHistory(0);
@@ -957,6 +1027,14 @@
       ok('render.inflight.gated', rendered === false && $('copyBtn').disabled === true);
       await rp;
       ok('render.inflight.cleared', rendered === true && $('copyBtn').disabled === false);
+
+      // fit-to-window: enabled on a diagram, re-fits scale, disabled behind an overlay
+      ok('fit.enabled.diagram', $('zoomFit').disabled === false);
+      scale = 0.111; fitView();
+      ok('fit.changesScale', scale !== 0.111 && scale > 0);
+      toggleHistory();
+      ok('fit.disabled.overlay', $('zoomFit').disabled === true);
+      toggleHistory();
 
       // #meta (engine/time) is shown on the diagram, hidden behind an overlay, restored on return
       ok('meta.shown.diagram', $('meta').classList.contains('show'));
@@ -999,6 +1077,12 @@
 
     // keyboard shortcuts (zoom / copy / save)
     window.addEventListener('keydown', function (e) {
+      // Space fits the diagram to the window — diagram view only (in overlays, let Space
+      // scroll the source/history content).
+      if ((e.key === ' ' || e.key === 'Spacebar') && !e.metaKey) {
+        if (!sourceOpen && !historyOpen) { e.preventDefault(); fitView(); }
+        return;
+      }
       if (!e.metaKey) return;
       var overlay = sourceOpen || historyOpen;   // zoom only applies to the diagram view
       if ((e.key === '=' || e.key === '+') && !overlay) { setScale(scale * 1.2); e.preventDefault(); }
