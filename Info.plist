@@ -40,6 +40,11 @@
                 <string>public.plain-text</string>
                 <string>NSStringPboardType</string>
             </array>
+            <!-- Empty context = no contextual restriction; required for the
+                 service to surface in the right-click Services menu of some
+                 apps (e.g. Slack/Electron). Mirrors Hammerspoon's declaration. -->
+            <key>NSRequiredContext</key>
+            <dict/>
         </dict>
     </array>
 </dict>
