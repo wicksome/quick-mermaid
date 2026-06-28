@@ -203,6 +203,7 @@
     var renderSeq = 0;       // unique mermaid render id counter (avoids id collisions on rapid renders)
     var historyItems = [];   // recent diagram sources (most recent first), injected by Swift
     var suppressKeyCopyUntil = 0;   // ignore keyboard ⌘C until this time (blocks the selection-grab ⌘C echo right after open)
+    var activeEngine = 'mermaid';   // engine that drew the current diagram (drives source-view highlighting)
 
     if (location.hash.indexOf('preview') !== -1) document.body.classList.add('preview');
 
@@ -218,7 +219,7 @@
         copied: '복사됨', saved: '저장됨', copyDone: '✓ 복사됨',
         tipZoomOut: '축소 (⌘−)', tipZoomIn: '확대 (⌘+)', tipReset: '맞춤 (⌘0)',
         tipHistory: '최근 다이어그램', tipSource: '소스 보기',
-        tipSave: '이미지 저장 (⌘S)', tipCopy: '이미지 복사 (⌘C)',
+        tipSave: '이미지 저장 (⌘S)', tipCopy: '이미지 복사 (⌘C)', tipCopyCode: '코드 복사 (⌘C)',
         histEmpty: '최근 다이어그램이 없어요',
         today: '오늘', yesterday: '어제', delete: '삭제'
       },
@@ -232,7 +233,7 @@
         copied: 'Copied', saved: 'Saved', copyDone: '✓ Copied',
         tipZoomOut: 'Zoom out (⌘−)', tipZoomIn: 'Zoom in (⌘+)', tipReset: 'Fit (⌘0)',
         tipHistory: 'Recent diagrams', tipSource: 'Show source',
-        tipSave: 'Save image (⌘S)', tipCopy: 'Copy image (⌘C)',
+        tipSave: 'Save image (⌘S)', tipCopy: 'Copy image (⌘C)', tipCopyCode: 'Copy code (⌘C)',
         histEmpty: 'No recent diagrams',
         today: 'Today', yesterday: 'Yesterday', delete: 'Delete'
       }
@@ -252,7 +253,7 @@
       $('histBtn').title = L.tipHistory;
       $('srcBtn').title = L.tipSource;
       $('saveBtn').title = L.tipSave;
-      $('copyBtn').title = L.tipCopy;
+      $('copyBtn').title = sourceOpen ? L.tipCopyCode : L.tipCopy;
       if (historyOpen) renderHistory();
     }
 
@@ -476,6 +477,7 @@
       // tests) fall back to content detection.
       var engine = pendingEngine; pendingEngine = null;
       if (!engine) engine = isPlantUML(lastCode) ? 'plantuml' : 'mermaid';
+      activeEngine = engine;
       if (engine === 'plantuml') { return doRenderPlantUML(); }
       if (!window.mermaid) { showState('⚠️', L.loadFail, L.loadFailSub); post(false, 'mermaid not loaded'); return; }
       try {
@@ -536,8 +538,21 @@
       h = h.replace(/\b(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram-v2|stateDiagram|erDiagram|gantt|pie|journey|mindmap|gitGraph|timeline|quadrantChart|TD|TB|LR|RL|BT|participant|actor|loop|alt|opt|par|rect|critical|break|else|and|end|note|over|activate|deactivate|class|subgraph|direction|click|style|linkStyle|section)\b/g, '<span class="kw">$1</span>');
       return h;
     }
+    // PlantUML highlighter. Single pass (alternation + replacer) so inserted spans are
+    // never re-scanned — avoids the "class" keyword matching inside a `class="…"` attribute.
+    function highlightPlantUML(src) {
+      var esc = escapeHtml(src);
+      var RE = /(\/'[\s\S]*?'\/)|(^[ \t]*'[^\n]*)|(@\w+)|(&lt;\|--|--\|&gt;|&lt;\|\.\.|\.\.\|&gt;|--&gt;&gt;|-&gt;&gt;|--&gt;|-&gt;|\.\.&gt;|&lt;--|&lt;\.\.|\*--|--\*|o--|--o|\.\.|--)|(\b(?:participant|actor|boundary|control|entity|database|collections|queue|class|interface|abstract|enum|annotation|object|package|namespace|component|node|folder|frame|cloud|artifact|rectangle|usecase|state|map|json|note|alt|else|opt|loop|par|break|critical|group|ref|activate|deactivate|destroy|create|return|title|header|footer|legend|caption|newpage|skinparam|hide|show|remove|start|stop|detach|if|then|elseif|endif|repeat|while|endwhile|switch|case|endswitch|fork|partition|split|as|over|autonumber|end)\b)/gm;
+      return esc.replace(RE, function (m, blockC, lineC, dir, arrow, kw) {
+        if (blockC != null || lineC != null) return '<span class="c">' + m + '</span>';
+        if (dir != null || kw != null) return '<span class="kw">' + m + '</span>';
+        if (arrow != null) return '<span class="op">' + m + '</span>';
+        return m;
+      });
+    }
     function renderSource() {
-      document.getElementById('srcCode').innerHTML = highlight(lastCode || '');
+      var hl = (activeEngine === 'plantuml') ? highlightPlantUML : highlight;
+      document.getElementById('srcCode').innerHTML = hl(lastCode || '');
     }
     function toggleSource() {
       sourceOpen = !sourceOpen;
@@ -726,24 +741,40 @@
     document.getElementById('zoomReset').onclick = resetView;
     document.getElementById('srcBtn').onclick = toggleSource;
     document.getElementById('histBtn').onclick = toggleHistory;
-    // Copy/Save act on the rendered diagram. Disable them while an overlay (source/history)
-    // hides the diagram — exporting something you can't see is unpredictable.
-    function exportBlocked() { return sourceOpen || historyOpen || !rendered; }
+    // Toolbar buttons adapt to the active view:
+    //  - diagram view : copy/save the PNG, zoom enabled
+    //  - source view  : copy the source TEXT (save off), zoom off
+    //  - history view : copy/save/zoom off
+    function exportBlocked() { return sourceOpen || historyOpen || !rendered; }   // PNG export (Save, and diagram Copy)
     function updateExportButtons() {
-      var dis = exportBlocked();
-      document.getElementById('copyBtn').disabled = dis;
-      document.getElementById('saveBtn').disabled = dis;
+      // Copy stays enabled in the source view (it copies the code); blocked in history / before a render.
+      var copyOff = sourceOpen ? !lastCode : (historyOpen || !rendered);
+      var copyBtn = document.getElementById('copyBtn');
+      copyBtn.disabled = copyOff;
+      copyBtn.title = sourceOpen ? L.tipCopyCode : L.tipCopy;   // source view copies code, not the image
+      document.getElementById('saveBtn').disabled = exportBlocked();
+      var zoomOff = sourceOpen || historyOpen;   // zoom only applies to the diagram
+      document.getElementById('zoomIn').disabled = zoomOff;
+      document.getElementById('zoomOut').disabled = zoomOff;
+      document.getElementById('zoomReset').disabled = zoomOff;
     }
     // Actual copy/save completion is signaled by Swift via callbacks (window.copied/saved) — no optimistic display
     var __onCopy = null;   // test seam: lets the test suite observe copies without the native side effect
     function doCopy() {
-      if (exportBlocked()) return;
-      if (__onCopy) { __onCopy(); return; }
+      if (sourceOpen) {                       // source view → copy the source text
+        if (!lastCode) return;
+        if (__onCopy) { __onCopy('text'); return; }
+        try { window.webkit.messageHandlers.copyText.postMessage(lastCode); } catch (e) {}
+        return;
+      }
+      if (exportBlocked()) return;            // diagram view → copy the PNG
+      if (__onCopy) { __onCopy('png'); return; }
       try { window.webkit.messageHandlers.copyPNG.postMessage({}); } catch (e) {}
     }
     // ⌘C from the keyboard: ignored briefly after open so the selection-grab ⌘C echo
-    // (synthesized by the global shortcut) can't auto-copy the diagram.
-    function keyboardCopy() { if (now() < suppressKeyCopyUntil) return; doCopy(); }
+    // (synthesized by the global shortcut) can't auto-copy the diagram. The guard only
+    // applies to the diagram view — copying source text is always user-initiated.
+    function keyboardCopy() { if (!sourceOpen && now() < suppressKeyCopyUntil) return; doCopy(); }
     function doSave() { if (exportBlocked()) return; try { window.webkit.messageHandlers.savePNG.postMessage({}); } catch (e) {} }
     document.getElementById('copyBtn').onclick = doCopy;
     document.getElementById('saveBtn').onclick = doSave;
@@ -799,6 +830,10 @@
       ok('puml.export.enabled', $('copyBtn').disabled === false);
       var pumlPd = window.exportData();
       ok('puml.exportData', !!pumlPd && JSON.parse(pumlPd).svg.indexOf('<svg') !== -1);
+      // PlantUML source view is highlighted by the engine-aware highlighter (keywords + arrows)
+      toggleSource();
+      ok('puml.source.highlighted', /class="kw"/.test($('srcCode').innerHTML) && /class="op"/.test($('srcCode').innerHTML));
+      toggleSource();
 
       // fence-aware routing: a ```lang code fence is stripped and its tag picks the
       // engine (overriding content), while plain Mermaid fences keep stripping.
@@ -851,11 +886,20 @@
       toggleSource();
       ok('source.closes', $('source').style.display === 'none');
 
-      // export buttons disabled while source overlay open, re-enabled on close
+      // source view: copy stays enabled (copies the source TEXT), save + zoom are disabled
       toggleSource();
-      ok('export.disabled.source', $('copyBtn').disabled === true && $('saveBtn').disabled === true);
+      ok('source.copy.enabled', $('copyBtn').disabled === false);
+      ok('source.save.disabled', $('saveBtn').disabled === true);
+      ok('source.zoom.disabled', $('zoomIn').disabled === true && $('zoomOut').disabled === true && $('zoomReset').disabled === true);
+      ok('source.copy.tooltip', $('copyBtn').title === L.tipCopyCode);   // hover says "copy code", not image
+      var srcCopyKind = null; __onCopy = function (k) { srcCopyKind = k; };
+      doCopy();
+      ok('source.copy.isText', srcCopyKind === 'text');
+      __onCopy = null;
       toggleSource();
-      ok('export.enabled.afterSource', $('copyBtn').disabled === false && $('saveBtn').disabled === false);
+      // back to the diagram: copy/save/zoom all re-enabled, tooltip back to "copy image"
+      ok('export.enabled.afterSource', $('copyBtn').disabled === false && $('saveBtn').disabled === false && $('zoomIn').disabled === false);
+      ok('diagram.copy.tooltip', $('copyBtn').title === L.tipCopy);
 
       // history: objects {code, ts}, date group headers, open/load/delete
       var nowS = Date.now() / 1000;
@@ -914,9 +958,10 @@
     // keyboard shortcuts (zoom / copy / save)
     window.addEventListener('keydown', function (e) {
       if (!e.metaKey) return;
-      if (e.key === '=' || e.key === '+') { setScale(scale * 1.2); e.preventDefault(); }
-      else if (e.key === '-') { setScale(scale / 1.2); e.preventDefault(); }
-      else if (e.key === '0') { resetView(); e.preventDefault(); }
+      var overlay = sourceOpen || historyOpen;   // zoom only applies to the diagram view
+      if ((e.key === '=' || e.key === '+') && !overlay) { setScale(scale * 1.2); e.preventDefault(); }
+      else if (e.key === '-' && !overlay) { setScale(scale / 1.2); e.preventDefault(); }
+      else if (e.key === '0' && !overlay) { resetView(); e.preventDefault(); }
       else if (e.key === 's') { e.preventDefault(); doSave(); }   // doSave is a no-op while an overlay is open
       else if (e.key === ',') {
         e.preventDefault();
