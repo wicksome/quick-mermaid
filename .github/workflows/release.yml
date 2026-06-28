@@ -27,8 +27,8 @@ jobs:
         id: ver
         run: |
           set -euo pipefail
-          latest=$(git tag --list 'v*' --sort=-v:refname | head -1)
-          latest="${latest#v}"; [ -z "$latest" ] && latest="0.0.0"
+          prev=$(git tag --list 'v*' --sort=-v:refname | head -1)
+          latest="${prev#v}"; [ -z "$latest" ] && latest="0.0.0"
           IFS=. read -r MA MI PA <<< "$latest"
           case "${{ inputs.bump }}" in
             major) MA=$((MA+1)); MI=0; PA=0;;
@@ -38,7 +38,11 @@ jobs:
           VER="$MA.$MI.$PA"
           echo "version=$VER" >> "$GITHUB_OUTPUT"
           echo "tag=v$VER" >> "$GITHUB_OUTPUT"
-          echo "==> release version: $VER"
+          # Previous tag is the baseline for release notes. Empty on the first
+          # release (no prior tag), in which case the notes fall back to a
+          # commit-list link instead of a compare diff.
+          echo "prev_tag=$prev" >> "$GITHUB_OUTPUT"
+          echo "==> release version: $VER (prev: ${prev:-none})"
 
       # Version is injected for the build only; it is NOT committed back to the
       # repo. The git tag (created by the release step) is the source of truth,
@@ -63,8 +67,21 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh release create "${{ steps.ver.outputs.tag }}" \
-            "QuickMermaid-${{ steps.ver.outputs.version }}.dmg" \
-            --target "${{ github.sha }}" \
-            --title "${{ steps.ver.outputs.tag }}" \
-            --generate-notes
+          PREV="${{ steps.ver.outputs.prev_tag }}"
+          # --notes-start-tag pins the previous tag as the baseline so the
+          # auto-generated "Full Changelog" footer is a compare diff
+          # (compare/<prev>...<new>) rather than a full commit-list link.
+          # On the first release (no prior tag) there is no diff to link.
+          if [ -n "$PREV" ]; then
+            gh release create "${{ steps.ver.outputs.tag }}" \
+              "QuickMermaid-${{ steps.ver.outputs.version }}.dmg" \
+              --target "${{ github.sha }}" \
+              --title "${{ steps.ver.outputs.tag }}" \
+              --generate-notes --notes-start-tag "$PREV"
+          else
+            gh release create "${{ steps.ver.outputs.tag }}" \
+              "QuickMermaid-${{ steps.ver.outputs.version }}.dmg" \
+              --target "${{ github.sha }}" \
+              --title "${{ steps.ver.outputs.tag }}" \
+              --generate-notes
+          fi
