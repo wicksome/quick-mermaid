@@ -33,6 +33,13 @@
   #toolbar button:disabled { opacity: 0.32; cursor: default; }
   #toolbar button:disabled:hover { background: #fff; }
   #zoomLabel { font-size: 12px; color: #6e6e73; min-width: 42px; text-align: center; }
+  /* engine + render-time readout next to the reset button */
+  #meta { display: none; align-items: center; gap: 6px; margin-left: 6px; font-size: 11px; color: #8a8a8e; white-space: nowrap; }
+  #meta.show { display: inline-flex; }
+  #meta .eng { font-weight: 600; border-radius: 4px; padding: 1px 6px; }
+  #meta .eng.mmd { color: #1a6fd0; background: #e8f1ff; }
+  #meta .eng.puml { color: #1f8a4c; background: #e7f7ee; }
+  #meta .ms { font-variant-numeric: tabular-nums; }
   .spacer { flex: 1; }
 
   body.preview #toolbar { display: none; }
@@ -115,6 +122,12 @@
     margin-top: 3px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 11px; color: #8a8a8e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  #history .item .eng {
+    display: inline-block; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 10px; font-weight: 600; border-radius: 4px; padding: 0 5px; margin-right: 6px;
+  }
+  #history .item .eng.mmd { color: #1a6fd0; background: #e8f1ff; }
+  #history .item .eng.puml { color: #1f8a4c; background: #e7f7ee; }
   #history .item .del {
     flex: none; width: 28px; height: 28px; padding: 0;
     border: none; background: none; color: #b0b0b5; cursor: pointer;
@@ -153,6 +166,7 @@
     <span id="zoomLabel">100%</span>
     <button id="zoomIn" title="Zoom in (⌘+)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     <button id="zoomReset" title="Reset (⌘0)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></button>
+    <span id="meta"><span class="eng"></span><span class="ms"></span></span>
     <span class="spacer"></span>
     <button id="histBtn" title="Recent diagrams"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></button>
     <button id="srcBtn" title="Show source text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
@@ -195,9 +209,11 @@
     var I18N = {
       ko: {
         reset: '초기화', source: '</> 소스', save: '이미지 저장', copy: '이미지 복사',
-        emptyTitle: '표시할 다이어그램이 없어요', emptySub: '먼저 mermaid 텍스트를 선택(또는 복사)한 뒤 다시 시도하세요.',
-        errTitle: '다이어그램을 그릴 수 없어요', errSub: 'mermaid 문법 오류로 보입니다. 상단 “소스” 버튼으로 원문을 확인하세요.',
+        emptyTitle: '표시할 다이어그램이 없어요', emptySub: '먼저 Mermaid 또는 PlantUML 텍스트를 선택(또는 복사)한 뒤 다시 시도하세요.',
+        errTitle: '다이어그램을 그릴 수 없어요', errSub: '문법 오류로 보입니다. 상단 “소스” 버튼으로 원문을 확인하세요.',
         loadFail: 'mermaid.js 로드 실패', loadFailSub: 'mermaid.min.js 를 찾지 못했습니다.',
+        pumlLoadFail: 'PlantUML 엔진 로드 실패', pumlLoadFailSub: 'plantuml.js / viz-global.js 를 찾지 못했습니다.',
+        pumlLoading: 'PlantUML 엔진 준비 중…', pumlLoadingSub: '처음 한 번 엔진을 불러오는 중입니다.',
         copied: '복사됨', saved: '저장됨', copyDone: '✓ 복사됨',
         tipZoomOut: '축소 (⌘−)', tipZoomIn: '확대 (⌘+)', tipReset: '맞춤 (⌘0)',
         tipHistory: '최근 다이어그램', tipSource: '소스 보기',
@@ -207,9 +223,11 @@
       },
       en: {
         reset: 'Reset', source: '</> Source', save: 'Save PNG', copy: 'Copy PNG',
-        emptyTitle: 'Nothing to render', emptySub: 'Select (or copy) some mermaid text and try again.',
-        errTitle: 'Could not render the diagram', errSub: 'Looks like a mermaid syntax error. Use the “Source” button above to inspect.',
+        emptyTitle: 'Nothing to render', emptySub: 'Select (or copy) some Mermaid or PlantUML text and try again.',
+        errTitle: 'Could not render the diagram', errSub: 'Looks like a syntax error. Use the “Source” button above to inspect.',
         loadFail: 'Failed to load mermaid.js', loadFailSub: 'mermaid.min.js was not found.',
+        pumlLoadFail: 'Failed to load the PlantUML engine', pumlLoadFailSub: 'plantuml.js / viz-global.js was not found.',
+        pumlLoading: 'Preparing the PlantUML engine…', pumlLoadingSub: 'Loading the engine for the first time.',
         copied: 'Copied', saved: 'Saved', copyDone: '✓ Copied',
         tipZoomOut: 'Zoom out (⌘−)', tipZoomIn: 'Zoom in (⌘+)', tipReset: 'Fit (⌘0)',
         tipHistory: 'Recent diagrams', tipSource: 'Show source',
@@ -279,6 +297,7 @@
     // empty/error state view (we render this instead of mermaid's default error screen)
     function showState(glyph, title, subtitle, detail) {
       rendered = false;                          // no diagram → export disabled
+      setMeta(null);                             // hide the engine/time readout
       document.getElementById('diagram').innerHTML = '';
       document.getElementById('stage').style.display = 'none';
       var s = document.getElementById('state');
@@ -296,6 +315,19 @@
       document.getElementById('stage').style.display = '';
     }
 
+    function now() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
+
+    // toolbar readout: which engine drew the current diagram + how long it took.
+    function setMeta(engine, ms) {
+      var el = document.getElementById('meta');
+      if (!engine) { el.classList.remove('show'); return; }
+      var eng = el.querySelector('.eng');
+      eng.textContent = engine === 'plantuml' ? 'PlantUML' : 'Mermaid';
+      eng.className = 'eng ' + (engine === 'plantuml' ? 'puml' : 'mmd');
+      el.querySelector('.ms').textContent = ms >= 1000 ? (ms / 1000).toFixed(1) + ' s' : Math.round(ms) + ' ms';
+      el.classList.add('show');
+    }
+
     // clean up temporary/error nodes mermaid left in body (keep only #toolbar/#stage/#state/#source)
     function cleanupOrphans() {
       var keep = { 'toolbar': 1, 'stage': 1, 'state': 1, 'source': 1, 'history': 1, 'toast': 1 };
@@ -305,24 +337,158 @@
       });
     }
 
+    // ── Engine detection ──
+    // PlantUML source opens with an `@start…` directive; detect it so bare (un-fenced)
+    // input routes correctly. Everything without it is treated as Mermaid.
+    function isPlantUML(code) { return /^\s*@start\w+/i.test(code || ''); }
+
+    // Strip a leading Markdown code fence (```lang … ```) and report its language tag.
+    // The tag drives engine routing (```puml/```plantuml → PlantUML, ```mermaid →
+    // Mermaid) and overrides content detection. This fence handling lives here (not in
+    // Swift) so the language tag survives long enough to route.
+    function stripFence(code) {
+      var t = (code || '').trim();
+      if (t.slice(0, 3) !== '```') return { body: t, lang: '' };
+      var nl = t.indexOf('\n');
+      var lang = (nl > 0 ? t.slice(3, nl) : t.slice(3)).trim().toLowerCase();
+      var body = nl > 0 ? t.slice(nl + 1) : '';
+      body = body.replace(/\s*```\s*$/, '');   // drop the closing fence if present
+      return { body: body.trim(), lang: lang };
+    }
+    function detectEngine(lang, body) {
+      if (lang === 'puml' || lang === 'plantuml' || lang === 'iuml') return 'plantuml';
+      if (lang === 'mermaid' || lang === 'mmd') return 'mermaid';
+      return isPlantUML(body) ? 'plantuml' : 'mermaid';
+    }
+    var pendingEngine = null;   // engine resolved by window.render (fence-aware); consumed once by doRender
+
+    // The PlantUML engine (plantuml.js ~7.6MB + viz-global.js ~1.4MB) is loaded on
+    // first use only, so Mermaid-only sessions never pay its parse cost. viz-global.js
+    // must load before plantuml.js (the engine reads the global `Viz`).
+    var pumlLoading = null;
+    function loadScript(src) {
+      return new Promise(function (resolve, reject) {
+        var s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = function () { reject(new Error('failed to load ' + src)); };
+        document.head.appendChild(s);
+      });
+    }
+    function ensurePlantUML() {
+      if (window.__puml && window.__puml.render) return Promise.resolve();
+      if (!pumlLoading) {
+        pumlLoading = loadScript('viz-global.js')
+          .then(function () { return loadScript('plantuml.js'); })
+          .catch(function (e) { pumlLoading = null; throw e; });
+      }
+      return pumlLoading;
+    }
+
+    // plantuml.js renders asynchronously into a target element (by id) and returns
+    // nothing — it has no completion callback. We watch the target with a
+    // MutationObserver and settle once mutations go quiet (or a hard timeout fires).
+    function renderPlantUMLInto(targetEl, code, dark) {
+      return new Promise(function (resolve, reject) {
+        targetEl.innerHTML = '';
+        var settled = false, quietTimer = null;
+        var obs = new MutationObserver(function () {
+          clearTimeout(quietTimer);
+          quietTimer = setTimeout(function () { finish(false); }, 150);
+        });
+        obs.observe(targetEl, { childList: true, subtree: true });
+        var hardTimer = setTimeout(function () { finish(true); }, 15000);
+        function finish(timedOut) {
+          if (settled) return; settled = true;
+          obs.disconnect(); clearTimeout(quietTimer); clearTimeout(hardTimer);
+          var svg = targetEl.querySelector('svg');
+          if (svg) resolve(svg);
+          else reject(new Error(timedOut ? 'PlantUML render timed out' : 'no diagram produced'));
+        }
+        try {
+          window.__puml.render(code.split(/\r\n|\r|\n/), targetEl.id, { dark: !!dark });
+        } catch (e) { obs.disconnect(); clearTimeout(hardTimer); reject(e); }
+      });
+    }
+
+    // Render a PlantUML diagram offscreen and return its SVG string (or '' on failure).
+    // Used for history thumbnails. The temp node lives under #stage so cleanupOrphans()
+    // — which only prunes direct <body> children — won't remove it mid-render.
+    async function renderPlantUMLToString(code) {
+      var tmp = document.createElement('div');
+      tmp.id = 'puthumb_' + (++thumbSeq);
+      tmp.style.cssText = 'position:absolute;left:-99999px;top:-99999px;visibility:hidden';
+      document.getElementById('stage').appendChild(tmp);
+      try {
+        var svg = await renderPlantUMLInto(tmp, code, false);
+        return svg ? svg.outerHTML : '';
+      } catch (e) {
+        return '';
+      } finally {
+        if (tmp.parentNode) tmp.parentNode.removeChild(tmp);
+      }
+    }
+
+    async function doRenderPlantUML() {
+      // First render pays the engine load; show a brief loading state so the panel
+      // isn't blank while ~9MB of JS parses.
+      if (!(window.__puml && window.__puml.render)) showState('⏳', L.pumlLoading, L.pumlLoadingSub);
+      try {
+        await ensurePlantUML();
+      } catch (e) {
+        showState('⚠️', L.pumlLoadFail, L.pumlLoadFailSub);
+        post(false, 'plantuml engine not loaded: ' + ((e && e.message) || e));
+        return;
+      }
+      try {
+        // Note: on a syntax error PlantUML draws its own error graphic into the SVG
+        // (the engine is a black box — we can't suppress it like Mermaid's), so a
+        // malformed diagram still resolves here rather than hitting the catch.
+        var t0 = now();
+        var svg = await renderPlantUMLInto(document.getElementById('diagram'), lastCode, currentTheme === 'dark');
+        var dt = now() - t0;
+        hideState();
+        cleanupOrphans();
+        scale = fitScale() * baseZoom;
+        centerContent();
+        rendered = true;
+        setMeta('plantuml', dt);
+        if (typeof updateExportButtons === 'function') updateExportButtons();
+        post(true, 'plantuml svg length=' + svg.outerHTML.length);
+      } catch (e) {
+        cleanupOrphans();
+        var msg = (e && e.message) ? e.message : String(e);
+        showState('🚫', L.errTitle, L.errSub, msg);
+        post(false, msg);
+      }
+    }
+
     async function doRender() {
       cleanupOrphans();
-      if (!window.mermaid) { showState('⚠️', L.loadFail, L.loadFailSub); post(false, 'mermaid not loaded'); return; }
-      // pre-check: empty input → friendly empty state
+      // pre-check: empty input → friendly empty state (engine-independent)
       if (!lastCode || !lastCode.trim()) {
         showState('🪧', L.emptyTitle, L.emptySub);
         post(false, 'empty input');
         return;
       }
+      // Engine is resolved fence-aware by window.render; direct callers (history,
+      // tests) fall back to content detection.
+      var engine = pendingEngine; pendingEngine = null;
+      if (!engine) engine = isPlantUML(lastCode) ? 'plantuml' : 'mermaid';
+      if (engine === 'plantuml') { return doRenderPlantUML(); }
+      if (!window.mermaid) { showState('⚠️', L.loadFail, L.loadFailSub); post(false, 'mermaid not loaded'); return; }
       try {
         mermaid.initialize({ startOnLoad: false, theme: currentTheme, suppressErrorRendering: true, maxTextSize: 900000, maxEdges: 2000 });
+        var t0 = now();
         var out = await mermaid.render('g' + (++renderSeq) + '_' + Date.now(), lastCode);
+        var dt = now() - t0;
         hideState();
         document.getElementById('diagram').innerHTML = out.svg;
         cleanupOrphans();
         scale = fitScale() * baseZoom;   // open at a size that fits the render window
         centerContent();
         rendered = true;
+        setMeta('mermaid', dt);
         if (typeof updateExportButtons === 'function') updateExportButtons();
         post(true, 'svg length=' + out.svg.length);
       } catch (e) {
@@ -421,10 +587,12 @@
         var k = dateKey(ts);
         if (k !== lastKey) { html += '<div class="ghdr">' + escapeHtml(dateLabel(ts)) + '</div>'; lastKey = k; }
         var oneLine = code.replace(/\s+/g, ' ').trim();
+        var engCls = isPlantUML(code) ? 'puml' : 'mmd';
+        var engName = isPlantUML(code) ? 'PlantUML' : 'Mermaid';
         html += '<div class="item" data-i="' + i + '">'
               + '<div class="thumb ph" data-i="' + i + '">…</div>'
               + '<div class="meta"><div class="t">' + escapeHtml(firstLine(code)) + '</div>'
-              + '<div class="src">' + escapeHtml(oneLine) + '</div></div>'
+              + '<div class="src"><span class="eng ' + engCls + '">' + engName + '</span>' + escapeHtml(oneLine) + '</div></div>'
               + '<button class="del" data-i="' + i + '" title="' + escapeHtml(L.delete) + '">'
               + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
               + '</button></div>';
@@ -469,6 +637,22 @@
         var box = boxes[i];
         var code = itemCode(historyItems[parseInt(box.getAttribute('data-i'), 10)]);
         if (!code || !code.trim()) { setThumbPlaceholder(box, '⌗'); continue; }
+        // PlantUML history items render offscreen via the engine (cached by code like
+        // the Mermaid path); a failure falls back to a neutral marker.
+        if (isPlantUML(code)) {
+          if (thumbCache[code] !== undefined) {
+            if (thumbCache[code]) fillThumb(box, thumbCache[code]); else setThumbPlaceholder(box, '🌿');
+            continue;
+          }
+          // Don't pull in the ~9MB engine just to draw a thumbnail — only render once it's
+          // already loaded (i.e. the user has opened a PlantUML diagram this session).
+          // Leave the cache unset so the row fills in next time history opens.
+          if (!(window.__puml && window.__puml.render)) { setThumbPlaceholder(box, '🌿'); continue; }
+          var psvg = await renderPlantUMLToString(code);
+          thumbCache[code] = psvg;
+          if (gen === thumbGen) { if (psvg) fillThumb(box, psvg); else setThumbPlaceholder(box, '🌿'); }
+          continue;
+        }
         if (thumbCache[code] !== undefined) {
           if (thumbCache[code]) fillThumb(box, thumbCache[code]); else setThumbPlaceholder(box, '⚠');
           continue;
@@ -513,9 +697,13 @@
       doRender();
     }
 
-    // Swift entry point
+    // Swift entry point. `code` may be wrapped in a Markdown code fence
+    // (```mermaid / ```puml / ```plantuml / plain ```); strip it and route by the
+    // fence language, then by content.
     window.render = function (code, theme, zoomPercent, bg, lang) {
-      lastCode = code || "";
+      var parsed = stripFence(code || "");
+      lastCode = parsed.body;
+      pendingEngine = detectEngine(parsed.lang, parsed.body);
       currentTheme = theme || "default";
       applyBackground(bg);
       applyI18n(lang);
@@ -579,6 +767,56 @@
       ok('render.valid.svg', $('diagram').querySelectorAll('svg').length === 1);
       ok('render.valid.noState', $('state').style.display !== 'flex');
       ok('render.valid.fitScale', scale > 0);
+      ok('meta.mermaid', $('meta').classList.contains('show')
+        && $('meta').querySelector('.eng').textContent === 'Mermaid'
+        && /\d/.test($('meta').querySelector('.ms').textContent));
+
+      // engine detection: @start… routes to PlantUML, everything else to Mermaid
+      ok('puml.detect', isPlantUML('@startuml\nA->B\n@enduml') === true
+        && isPlantUML('  @startmindmap\n*a') === true
+        && isPlantUML('graph TD\n A-->B') === false);
+
+      // PlantUML: lazy-load the engine and render a class diagram (exercises the
+      // Graphviz/WASM layout path), reusing the shared fit/export pipeline.
+      lastCode = '@startuml\nclass A {\n +foo()\n}\nclass B\nA --> B : uses\n@enduml';
+      await doRender();
+      ok('puml.render.svg', $('diagram').querySelectorAll('svg').length === 1);
+      ok('puml.render.noState', $('state').style.display !== 'flex');
+      ok('puml.meta', $('meta').querySelector('.eng').textContent === 'PlantUML');
+      ok('puml.export.enabled', $('copyBtn').disabled === false);
+      var pumlPd = window.exportData();
+      ok('puml.exportData', !!pumlPd && JSON.parse(pumlPd).svg.indexOf('<svg') !== -1);
+
+      // fence-aware routing: a ```lang code fence is stripped and its tag picks the
+      // engine (overriding content), while plain Mermaid fences keep stripping.
+      var fp1 = stripFence('```mermaid\ngraph TD\n A-->B\n```');
+      ok('fence.mermaid.strip', fp1.lang === 'mermaid' && fp1.body === 'graph TD\n A-->B'
+        && detectEngine(fp1.lang, fp1.body) === 'mermaid');
+      var fp2 = stripFence('```puml\n@startuml\nA->B\n@enduml\n```');
+      ok('fence.puml.strip', fp2.lang === 'puml' && detectEngine(fp2.lang, fp2.body) === 'plantuml');
+      // a puml fence wins even when the body has no @start; mermaid fence wins over @start-looking body
+      ok('fence.lang.overrides', detectEngine('plantuml', 'class A') === 'plantuml'
+        && detectEngine('mermaid', '@startuml') === 'mermaid');
+      ok('fence.none.content', detectEngine('', '@startuml\nA->B') === 'plantuml'
+        && detectEngine('', 'graph TD') === 'mermaid');
+      // integration: window.render strips the fence and routes/records the body
+      window.render('```mermaid\ngraph TD\n  P-->Q\n```', 'default', 100, '#fff', 'en');
+      await new Promise(function (r) { setTimeout(r, 300); });
+      ok('fence.render.mermaid', $('diagram').querySelectorAll('svg').length === 1 && lastCode === 'graph TD\n  P-->Q');
+      window.render('```puml\n@startuml\nclass A\nclass B\nA --> B\n@enduml\n```', 'default', 100, '#fff', 'en');
+      await new Promise(function (r) { setTimeout(r, 1500); });
+      ok('fence.render.puml', $('diagram').querySelectorAll('svg').length === 1 && lastCode.indexOf('@startuml') === 0);
+
+      // PlantUML history items: engine label + offscreen-rendered thumbnail (engine is
+      // loaded by now). thumbCache is cleared first so this row actually renders.
+      thumbCache = {};
+      setHistory([{ code: '@startuml\nclass A\nclass B\nA --> B\n@enduml', ts: Date.now() / 1000 }]);
+      toggleHistory();
+      ok('puml.history.engineLabel', !!$('history').querySelector('.eng.puml')
+        && $('history').querySelector('.eng').textContent === 'PlantUML');
+      await thumbsDone;
+      ok('puml.history.thumb', $('history').querySelectorAll('.thumb svg').length === 1);
+      toggleHistory();   // close so later history tests start clean
 
       // invalid → error state + export disabled
       lastCode = '%%nope%%\n@@@@'; await doRender();
@@ -616,6 +854,7 @@
       ok('history.opens', $('history').style.display === 'block');
       ok('history.lists', $('history').querySelectorAll('.item').length === 2);
       ok('history.groupHeaders', $('history').querySelectorAll('.ghdr').length === 2);
+      ok('history.engineLabel', $('history').querySelectorAll('.eng.mmd').length === 2);
       await thumbsDone;   // both items are valid mermaid → each row gets a preview svg
       var thumbSvgs = $('history').querySelectorAll('.thumb svg');
       ok('history.thumbnails', thumbSvgs.length === 2);
