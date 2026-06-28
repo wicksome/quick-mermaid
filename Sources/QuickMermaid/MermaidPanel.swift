@@ -41,11 +41,12 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
 
     func show(code: String) {
         selfTestMode = false
-        let cleaned = Self.stripCodeFences(code)
+        // The renderer strips any Markdown code fence and uses its language tag
+        // (```mermaid / ```puml) to pick the engine, so the raw text is passed through.
         // History is recorded only after a successful render (see the "result" handler).
         ensurePanel(offscreen: false)
         guard let panel else { return }
-        loadOrRender(code: cleaned)
+        loadOrRender(code: code)
         positionCenter(panel)
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
@@ -178,21 +179,6 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
 
     private static func rendererURL() -> URL? {
         Bundle.main.url(forResource: "renderer", withExtension: "html")
-    }
-
-    /// Strip a surrounding Markdown code fence (```mermaid … ``` or ``` … ```) if present.
-    static func stripCodeFences(_ s: String) -> String {
-        var t = s.trimmingCharacters(in: .whitespacesAndNewlines)
-        if t.hasPrefix("```") {
-            if let nl = t.firstIndex(of: "\n") {
-                t = String(t[t.index(after: nl)...])   // drop the opening ```/```lang line
-            } else {
-                t = ""
-            }
-            t = t.trimmingCharacters(in: .whitespacesAndNewlines)
-            if t.hasSuffix("```") { t = String(t.dropLast(3)) }
-        }
-        return t.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Copy / Save PNG (delegated to DiagramExporter — diagram only)
