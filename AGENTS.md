@@ -11,7 +11,11 @@ into a diagram in a floating quick-look panel. It is a *viewer*, not an editor.
 It also renders **PlantUML** (`@startuml…@enduml` and other `@start…` diagrams),
 auto-detected and routed to a vendored offline PlantUML engine. Mermaid remains
 the primary focus — this is not a PlantUML tool.
-See `README.md` for user-facing docs and `docs/specs/` for design notes.
+See `README.md` for user-facing docs, **`docs/specs/behavior.md` for the behavior
+spec** — what the renderer must do and must never do, as observable behavior; treat it
+as a checklist when changing the renderer and keep its "must never" list bug-free — and
+`docs/specs/` for design notes. The `--test` suite is the spec's automated enforcement;
+update the spec and a test together.
 
 ## Core principles
 
@@ -73,7 +77,8 @@ can't shadow the installed app as a duplicate Services provider.
    suite (`window.__test` in `renderer.html`) offscreen and prints
    `TEST {"pass":N,"total":N,"failed":[]}` — exit 0 only when `failed` is empty.
    It covers render/empty/error states, the source overlay, and history. Add cases
-   to `window.__test` when you touch the renderer; keep it green.
+   to `window.__test` when you touch the renderer; keep it green. The test cases are
+   the executable form of `docs/specs/behavior.md` — keep the two in sync.
 3. For changes to triggers/UI, also confirm the relevant process stays alive and
    doesn't crash (e.g. `printf 'graph TD\n A-->B\n' | ".../QuickMermaid" --stdin`).
 3. **GUI behavior cannot be verified headlessly** (Services menu, the floating
