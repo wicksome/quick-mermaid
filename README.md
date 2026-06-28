@@ -6,6 +6,10 @@ QuickMermaid is a lightweight macOS menu-bar app that turns Mermaid source text
 into a rendered diagram in a floating quick-look panel. Select Mermaid text
 anywhere, trigger it, and the diagram pops up — no editor, no context switch.
 
+<p align="center">
+  <img src="docs/screenshots/render-example.png" alt="QuickMermaid rendering a Mermaid diagram in its floating panel" width="800">
+</p>
+
 ![platform](https://img.shields.io/badge/platform-macOS%2013%2B-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
