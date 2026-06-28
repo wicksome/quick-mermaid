@@ -15,6 +15,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
     // Controls
     private let languagePopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let themePopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let fontPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let zoomField = NSTextField()
     private let zoomStepper = NSStepper()
     private let bgWell = NSColorWell()
@@ -27,6 +28,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
     // Row labels
     private let languageLabel = NSTextField(labelWithString: "")
     private let themeLabel = NSTextField(labelWithString: "")
+    private let fontLabel = NSTextField(labelWithString: "")
     private let zoomLabel = NSTextField(labelWithString: "")
     private let bgLabel = NSTextField(labelWithString: "")
     private let previewHeader = NSTextField(labelWithString: "")
@@ -154,6 +156,20 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
         themePopup.selectItem(withTitle: Settings.theme)
         themePopup.target = self; themePopup.action = #selector(themeChanged)
         pane.addSubview(themeLabel); pane.addSubview(themePopup); y += 26 + 16
+
+        fontLabel.frame = NSRect(x: Self.LX, y: y + 4, width: 130, height: 18)
+        fontPopup.frame = NSRect(x: Self.CX, y: y, width: Self.CW, height: 26)
+        fontPopup.addItem(withTitle: L10n.t("settings.fontDefault"))   // maps to "default"
+        fontPopup.item(at: 0)?.representedObject = "default"
+        for fam in NSFontManager.shared.availableFontFamilies.sorted() {
+            fontPopup.addItem(withTitle: fam)
+            fontPopup.lastItem?.representedObject = fam
+        }
+        let savedFont = Settings.fontFamily
+        fontPopup.selectItem(at: savedFont == "default" ? 0
+            : (fontPopup.itemTitles.firstIndex(of: savedFont) ?? 0))
+        fontPopup.target = self; fontPopup.action = #selector(fontChanged)
+        pane.addSubview(fontLabel); pane.addSubview(fontPopup); y += 26 + 16
 
         bgLabel.frame = NSRect(x: Self.LX, y: y + 3, width: 130, height: 18)
         bgWell.frame = NSRect(x: Self.CX, y: y, width: 60, height: 24)
@@ -290,6 +306,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
         languageLabel.stringValue = L10n.t("settings.language")
         languagePopup.item(at: 0)?.title = L10n.t("settings.langSystem")
         themeLabel.stringValue = L10n.t("settings.theme")
+        fontLabel.stringValue = L10n.t("settings.font")
+        fontPopup.item(at: 0)?.title = L10n.t("settings.fontDefault")
         zoomLabel.stringValue = L10n.t("settings.zoom")
         bgLabel.stringValue = L10n.t("settings.bg")
         launchAtLoginCheck.title = L10n.t("settings.launchAtLogin")
@@ -361,6 +379,13 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
     @objc private func themeChanged() {
         Settings.theme = themePopup.titleOfSelectedItem ?? "default"
         updatePreview()
+    }
+    @objc private func fontChanged() {
+        Settings.fontFamily = (fontPopup.selectedItem?.representedObject as? String) ?? "default"
+        updatePreview()
+        // Inform the resident app so an open panel re-reads the font on its next render.
+        DistributedNotificationCenter.default().postNotificationName(
+            NSNotification.Name(Settings.changedNotification), object: nil, userInfo: nil, deliverImmediately: true)
     }
     @objc private func zoomFieldChanged() {
         let v = max(10, min(800, zoomField.integerValue))
