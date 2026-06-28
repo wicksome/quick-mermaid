@@ -99,6 +99,13 @@
     padding: 9px 10px 9px 16px; border-bottom: 1px solid #ececef; cursor: pointer;
   }
   #history .item:hover { background: #eef1f5; }
+  #history .item .thumb {
+    flex: none; width: 56px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    background: #fff; border: 1px solid #e3e3e6; border-radius: 6px; overflow: hidden;
+  }
+  #history .item .thumb svg { display: block; width: 100%; height: 100%; }
+  #history .item .thumb.ph { color: #c7c7cc; font-size: 15px; }   /* placeholder while rendering / on failure */
   #history .item .meta { flex: 1; min-width: 0; }
   #history .item .t {
     font-size: 13px; font-weight: 600; color: #1d1d1f;
@@ -415,6 +422,7 @@
         if (k !== lastKey) { html += '<div class="ghdr">' + escapeHtml(dateLabel(ts)) + '</div>'; lastKey = k; }
         var oneLine = code.replace(/\s+/g, ' ').trim();
         html += '<div class="item" data-i="' + i + '">'
+              + '<div class="thumb ph" data-i="' + i + '">…</div>'
               + '<div class="meta"><div class="t">' + escapeHtml(firstLine(code)) + '</div>'
               + '<div class="src">' + escapeHtml(oneLine) + '</div></div>'
               + '<button class="del" data-i="' + i + '" title="' + escapeHtml(L.delete) + '">'
@@ -428,6 +436,53 @@
       Array.prototype.forEach.call(el.querySelectorAll('.del'), function (btn) {
         btn.onclick = function (ev) { ev.stopPropagation(); deleteHistory(parseInt(btn.getAttribute('data-i'), 10)); };
       });
+      thumbsDone = renderThumbnails(++thumbGen);   // fill in diagram previews asynchronously
+    }
+
+    // Render a small diagram preview for each history row. Async + cached by code
+    // so reopening history is instant; a parse failure falls back to a glyph and
+    // never breaks the row. `gen` guards against an older run filling stale rows
+    // after the list re-rendered.
+    var thumbCache = {};   // code -> svg string ('' = render failed)
+    var thumbGen = 0, thumbSeq = 0, thumbsDone = Promise.resolve();
+    function setThumbPlaceholder(box, glyph) { box.classList.add('ph'); box.textContent = glyph; }
+    function fillThumb(box, svg) {
+      box.classList.remove('ph');
+      box.innerHTML = svg;
+      var s = box.querySelector('svg');
+      if (s) {
+        // Scale the whole diagram to fit the small box (letterboxed via viewBox),
+        // overriding the width/height/max-width mermaid emits — otherwise the
+        // natural-size svg overflows and the box just shows clipped whitespace.
+        s.setAttribute('width', '100%');
+        s.setAttribute('height', '100%');
+        s.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        s.style.maxWidth = 'none';
+        s.style.maxHeight = 'none';
+      }
+    }
+    async function renderThumbnails(gen) {
+      if (!window.mermaid) return;
+      var boxes = document.getElementById('history').querySelectorAll('.thumb');
+      for (var i = 0; i < boxes.length; i++) {
+        if (gen !== thumbGen) return;   // a newer renderHistory() superseded us
+        var box = boxes[i];
+        var code = itemCode(historyItems[parseInt(box.getAttribute('data-i'), 10)]);
+        if (!code || !code.trim()) { setThumbPlaceholder(box, '⌗'); continue; }
+        if (thumbCache[code] !== undefined) {
+          if (thumbCache[code]) fillThumb(box, thumbCache[code]); else setThumbPlaceholder(box, '⚠');
+          continue;
+        }
+        try {
+          var out = await mermaid.render('thumb' + (++thumbSeq) + '_' + Date.now(), code);
+          thumbCache[code] = out.svg;
+          if (gen === thumbGen) fillThumb(box, out.svg);
+        } catch (e) {
+          thumbCache[code] = '';
+          if (gen === thumbGen) setThumbPlaceholder(box, '⚠');
+        }
+      }
+      cleanupOrphans();   // drop any temp nodes mermaid appended to <body>
     }
     function deleteHistory(i) {
       if (i < 0 || i >= historyItems.length) return;
@@ -561,6 +616,13 @@
       ok('history.opens', $('history').style.display === 'block');
       ok('history.lists', $('history').querySelectorAll('.item').length === 2);
       ok('history.groupHeaders', $('history').querySelectorAll('.ghdr').length === 2);
+      await thumbsDone;   // both items are valid mermaid → each row gets a preview svg
+      var thumbSvgs = $('history').querySelectorAll('.thumb svg');
+      ok('history.thumbnails', thumbSvgs.length === 2);
+      // fit path applied: svg scaled to the box rather than left at natural size
+      ok('history.thumbnails.fit', thumbSvgs.length === 2
+        && thumbSvgs[0].getAttribute('preserveAspectRatio') === 'xMidYMid meet'
+        && thumbSvgs[0].getAttribute('width') === '100%');
       ok('export.disabled.history', $('copyBtn').disabled === true && $('saveBtn').disabled === true);
       deleteHistory(1);
       ok('history.delete', $('history').querySelectorAll('.item').length === 1);
