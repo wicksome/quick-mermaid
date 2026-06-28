@@ -11,6 +11,7 @@ enum Settings {
     private static let kZoom = "defaultZoom"
     private static let kCloseOnFocusLoss = "closeOnFocusLoss"
     private static let kBackground = "backgroundColor"
+    private static let kFont = "fontFamily"
     private static let kLanguage = "language"
     private static let kShortcutEnabled = "shortcutEnabled"
     private static let kShortcutKeyCode = "shortcutKeyCode"
@@ -46,6 +47,18 @@ enum Settings {
             return valid ? v : "#FFFFFF"
         }
         set { d.set(newValue, forKey: kBackground) }
+    }
+
+    /// Diagram-text font family. "default" means each engine's built-in font (no override).
+    /// Validated on read against the installed families so a stale/arbitrary stored value
+    /// (e.g. a font later uninstalled) can't be injected into the renderer JS.
+    static var fontFamily: String {
+        get {
+            let v = d.string(forKey: kFont) ?? "default"
+            if v == "default" { return "default" }
+            return NSFontManager.shared.availableFontFamilies.contains(v) ? v : "default"
+        }
+        set { d.set(newValue, forKey: kFont) }
     }
 
     /// UI language preference: "system" (default), "en", or "ko".
