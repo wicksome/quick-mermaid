@@ -28,9 +28,7 @@ Services, or pipe via CLI) → diagram. Think Quick Look, not Preview.app.
 - **Themes & background** — pick a Mermaid theme and a canvas background color.
 - **Source view** — toggle the original Mermaid text with syntax highlighting.
 - **PNG export** — copy (`⌘C`) or save (`⌘S`) the **diagram only** (no toolbar, full size even off-screen).
-- **Friendly states** — clear empty / parse-error views instead of a raw error.
 - **Offline** — Mermaid is vendored; no network required.
-- **Localized** — English and Korean (follows the system language).
 
 ## Install
 
