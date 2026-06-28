@@ -28,7 +28,8 @@ Services, or pipe via CLI) → diagram. Think Quick Look, not Preview.app.
 - **Themes & background** — pick a Mermaid theme and a canvas background color.
 - **Source view** — toggle the original Mermaid text with syntax highlighting.
 - **PNG export** — copy (`⌘C`) or save (`⌘S`) the **diagram only** (no toolbar, full size even off-screen).
-- **Offline** — Mermaid is vendored; no network required.
+- **PlantUML too** *(bonus)* — source that starts with `@startuml…@enduml` (and other `@start…` diagrams) is auto-detected and rendered by a vendored offline PlantUML engine. Mermaid stays the primary focus.
+- **Offline** — Mermaid and the PlantUML engine are vendored; no network required.
 
 ## Install
 
@@ -107,4 +108,7 @@ conventions, and release process are in **[AGENTS.md](AGENTS.md)**.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Bundled third-party engines (Mermaid, PlantUML, Viz.js/Graphviz,
+TeaVM, Expat) retain their own licenses — see
+[THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md). PlantUML is multi-licensed and
+used here under its MIT option.
