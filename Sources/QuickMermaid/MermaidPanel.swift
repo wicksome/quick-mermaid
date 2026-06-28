@@ -147,20 +147,21 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
 
     private func injectRender() {
         guard let code = pendingCode else { return }
-        // Safely escape as a JSON array and extract [0] in JS
+        // Safely escape as a JSON array; extract code at [0] and font at [1] in JS
+        let font = selfTestMode ? "default" : Settings.fontFamily
         let json: String
-        if let data = try? JSONSerialization.data(withJSONObject: [code]),
+        if let data = try? JSONSerialization.data(withJSONObject: [code, font]),
            let str = String(data: data, encoding: .utf8) {
             json = str
         } else {
-            json = "[\"\"]"
+            json = "[\"\",\"default\"]"
         }
-        // Self-test renders with defaults (settings-independent); otherwise apply stored theme/zoom/background
+        // Self-test renders with defaults (settings-independent); otherwise apply stored theme/zoom/background/font
         let theme = selfTestMode ? "default" : Settings.theme
         let zoom = selfTestMode ? 100 : Settings.defaultZoom
         let bg = selfTestMode ? "#FFFFFF" : Settings.backgroundColor
         let lang = selfTestMode ? "en" : L10n.lang
-        webView.evaluateJavaScript("window.render(\(json)[0], '\(theme)', \(zoom), '\(bg)', '\(lang)');", completionHandler: nil)
+        webView.evaluateJavaScript("window.render(\(json)[0], '\(theme)', \(zoom), '\(bg)', '\(lang)', \(json)[1]);", completionHandler: nil)
         if !selfTestMode { injectHistory() }
     }
 

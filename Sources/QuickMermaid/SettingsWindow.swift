@@ -320,13 +320,13 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
     private func updatePreview() {
         guard previewLoaded else { return }
         let json: String
-        if let data = try? JSONSerialization.data(withJSONObject: [Self.sample]),
+        if let data = try? JSONSerialization.data(withJSONObject: [Self.sample, Settings.fontFamily]),
            let str = String(data: data, encoding: .utf8) {
             json = str
         } else {
-            json = "[\"\"]"
+            json = "[\"\",\"default\"]"
         }
-        webView.evaluateJavaScript("window.render(\(json)[0], '\(Settings.theme)', \(Settings.defaultZoom), '\(Settings.backgroundColor)', '\(L10n.lang)');", completionHandler: nil)
+        webView.evaluateJavaScript("window.render(\(json)[0], '\(Settings.theme)', \(Settings.defaultZoom), '\(Settings.backgroundColor)', '\(L10n.lang)', \(json)[1]);", completionHandler: nil)
     }
 
     // MARK: - Hex <-> NSColor
