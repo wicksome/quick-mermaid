@@ -57,6 +57,12 @@ Scope: what happens once source text is being rendered/viewed. How text gets in
 - Mermaid-only sessions never load the PlantUML engine; it loads on the first PlantUML
   render and not before.
 
+### Font
+- When a font family is configured (not "default"), diagram text renders in that font:
+  Mermaid via its `fontFamily` config, PlantUML via an injected `skinparam defaultFontName`.
+- "default" leaves each engine's built-in font — behavior identical to no setting.
+- Only installed system fonts are selectable; a value that isn't installed falls back to "default".
+
 ---
 
 ## Must never (it's a bug if you observe this)
@@ -81,3 +87,6 @@ Scope: what happens once source text is being rendered/viewed. How text gets in
 - **Nothing may be fetched from the network** to render, ever.
 - **A stuck state is a bug**: a render that fails, errors, or times out must always
   resolve to a diagram or a clear empty/error state — never a blank or spinning view.
+- The font is applied to the diagram only. The source view must show the **original**
+  source — the injected `skinparam defaultFontName` (or any preamble directive) must
+  never appear in the source overlay or in the copied source text.

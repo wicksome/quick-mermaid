@@ -99,6 +99,10 @@ Open via `qmmd` (no input) or the menu-bar icon → **Settings**. Configure the
 default theme, default zoom, background color, the global shortcut, and whether
 the panel closes when it loses focus. A live preview reflects your choices.
 
+- **Font** — pick a diagram-text font (any installed system font), or "Default" to keep
+  each engine's built-in font. Applies to both Mermaid and PlantUML. PlantUML coverage
+  depends on the diagram type (`skinparam defaultFontName`); some non-UML types may ignore it.
+
 ## Limitations
 
 - Unsigned / not notarized — intended for personal use; Gatekeeper warns on first launch.
