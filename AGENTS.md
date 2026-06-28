@@ -23,17 +23,21 @@ See `README.md` for user-facing docs and `docs/specs/` for design notes.
 ## Build, run, verify
 
 ```bash
-./build.sh             # build QuickMermaid.app (swift build + hand-assembled bundle)
-./build.sh --dmg       # + QuickMermaid.dmg
+./build.sh             # build build/QuickMermaid.app (swift build + hand-assembled bundle)
+./build.sh --dmg       # + build/QuickMermaid.dmg
 ./build.sh --selftest  # build, then headless render-pipeline check (MUST stay green)
 ./build.sh --install   # install to /Applications + put qmmd on PATH + launch
 ```
+
+Build artifacts land in `build/` (gitignored). `--install` copies to
+`/Applications` and unregisters the `build/` copy from Launch Services so it
+can't shadow the installed app as a duplicate Services provider.
 
 **Always verify before claiming done:**
 1. `./build.sh --selftest` must print `SELFTEST PASS`. This loads `renderer.html`
    in an offscreen WKWebView and renders a sample diagram — it is the regression
    gate for the render pipeline.
-2. `QuickMermaid.app/Contents/MacOS/QuickMermaid --test` runs the renderer JS test
+2. `build/QuickMermaid.app/Contents/MacOS/QuickMermaid --test` runs the renderer JS test
    suite (`window.__test` in `renderer.html`) offscreen and prints
    `TEST {"pass":N,"total":N,"failed":[]}` — exit 0 only when `failed` is empty.
    It covers render/empty/error states, the source overlay, and history. Add cases

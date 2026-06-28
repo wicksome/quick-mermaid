@@ -59,7 +59,7 @@ jobs:
           set -euo pipefail
           chmod +x build.sh
           ./build.sh --dmg
-          mv -f QuickMermaid.dmg "QuickMermaid-${{ steps.ver.outputs.version }}.dmg"
+          mv -f build/QuickMermaid.dmg "QuickMermaid-${{ steps.ver.outputs.version }}.dmg"
 
       # Creates the tag at the current main HEAD and the release with the dmg.
       - name: Create GitHub Release + tag + upload dmg

@@ -22,7 +22,7 @@ echo "==> build dmg"
 ./build.sh --dmg
 
 DMG="QuickMermaid-$VER.dmg"
-mv -f QuickMermaid.dmg "$DMG"
+mv -f build/QuickMermaid.dmg "$DMG"
 
 echo "built: $PWD/$DMG"
 
