@@ -1,10 +1,15 @@
 import AppKit
 import WebKit
 
-/// Native settings window with a sectioned, modern layout. Changes are saved to
-/// UserDefaults immediately; the preview WKWebView re-renders the sample with the
-/// new settings. On open it checks GitHub Releases for a newer version.
-final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDelegate {
+/// A top-anchored view so panes can be laid out top-down (y grows downward).
+private final class FlippedView: NSView {
+    override var isFlipped: Bool { true }
+}
+
+/// Native settings window with a toolbar-tabbed layout (General / Appearance /
+/// Shortcut / About). The window resizes to each tab's content. Changes are saved
+/// to UserDefaults immediately; the Appearance tab hosts a live preview WKWebView.
+final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDelegate, NSToolbarDelegate {
     private var window: NSWindow?
 
     // Controls
@@ -16,20 +21,15 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
     private let shortcutCheck = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let recorderButton = NSButton(title: "", target: nil, action: nil)
     private let keepOpenCheck = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private let launchAtLoginCheck = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let releasesButton = NSButton(title: "", target: nil, action: nil)
-
-    // Section headers
-    private let secAppearance = NSTextField(labelWithString: "")
-    private let secShortcut = NSTextField(labelWithString: "")
-    private let secWindow = NSTextField(labelWithString: "")
-    private let secAbout = NSTextField(labelWithString: "")
-    private let previewHeader = NSTextField(labelWithString: "")
 
     // Row labels
     private let languageLabel = NSTextField(labelWithString: "")
     private let themeLabel = NSTextField(labelWithString: "")
     private let zoomLabel = NSTextField(labelWithString: "")
     private let bgLabel = NSTextField(labelWithString: "")
+    private let previewHeader = NSTextField(labelWithString: "")
     private let versionLabel = NSTextField(labelWithString: "")
     private let updateStatusLabel = NSTextField(labelWithString: "")
 
@@ -37,6 +37,33 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
     private var previewLoaded = false
     private var recordingMonitor: Any?
     private var knownNewer: String?   // newer version found by the update check, if any
+
+    // Tabs
+    private enum Tab: String, CaseIterable {
+        case general, appearance, shortcut, about
+        var labelKey: String {
+            switch self {
+            case .general: return "settings.secGeneral"
+            case .appearance: return "settings.secAppearance"
+            case .shortcut: return "settings.secShortcut"
+            case .about: return "settings.secAbout"
+            }
+        }
+        var symbol: String {
+            switch self {
+            case .general: return "gearshape"
+            case .appearance: return "paintpalette"
+            case .shortcut: return "keyboard"
+            case .about: return "info.circle"
+            }
+        }
+    }
+    private var panes: [Tab: NSView] = [:]
+    private var toolbarItems: [Tab: NSToolbarItem] = [:]
+    private var current: Tab = .general
+
+    private static let W: CGFloat = 520
+    private static let LX: CGFloat = 24, CX: CGFloat = 168, CW: CGFloat = 300
 
     /// Called when the window is closed (e.g., quit the app in CLI --settings mode). Ignored if nil.
     var onClose: (() -> Void)?
@@ -56,119 +83,101 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
         if window == nil { build() }
         window?.level = .floating   // float above the render panel
         NSApp.activate(ignoringOtherApps: true)
-        window?.center()
         window?.makeKeyAndOrderFront(nil)
         window?.orderFrontRegardless()
         checkForUpdate()
     }
 
+    // MARK: - Build
+
     private func build() {
-        let W: CGFloat = 520, H: CGFloat = 680
-        let LX: CGFloat = 28, CX: CGFloat = 176, CW: CGFloat = 300
         let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: W, height: H),
+            contentRect: NSRect(x: 0, y: 0, width: Self.W, height: 300),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
         win.delegate = self
         win.isReleasedWhenClosed = false
-        let content = NSView(frame: NSRect(x: 0, y: 0, width: W, height: H))
+        win.toolbarStyle = .preference
 
-        var y = H - 22
-        func section(_ lbl: NSTextField) {
-            lbl.font = .systemFont(ofSize: 11, weight: .semibold)
-            lbl.textColor = .tertiaryLabelColor
-            lbl.frame = NSRect(x: LX, y: y - 15, width: W - 2 * LX, height: 15)
-            content.addSubview(lbl); y -= 15 + 8
-        }
-        func sep() {
-            let b = NSBox(frame: NSRect(x: LX, y: y - 1, width: W - 2 * LX, height: 1))
-            b.boxType = .separator
-            content.addSubview(b); y -= 1 + 16
-        }
-        func row(_ h: CGFloat) -> CGFloat { let fy = y - h; y -= h + 12; return fy }
-        func label(_ l: NSTextField, _ fy: CGFloat) {
-            l.frame = NSRect(x: LX, y: fy + 4, width: 140, height: 18); content.addSubview(l)
-        }
+        let toolbar = NSToolbar(identifier: "settingsToolbar")
+        toolbar.delegate = self
+        toolbar.displayMode = .iconAndLabel
+        toolbar.allowsUserCustomization = false
+        win.toolbar = toolbar
 
-        // Appearance
-        section(secAppearance)
-        var fy = row(26); label(languageLabel, fy)
-        languagePopup.frame = NSRect(x: CX, y: fy, width: CW, height: 26)
+        panes = [
+            .general: makeGeneralPane(),
+            .appearance: makeAppearancePane(),
+            .shortcut: makeShortcutPane(),
+            .about: makeAboutPane(),
+        ]
+        self.window = win
+        relabel()
+        toolbar.selectedItemIdentifier = NSToolbarItem.Identifier(current.rawValue)
+        select(current, animate: false)
+    }
+
+    private func makeGeneralPane() -> NSView {
+        let pane = FlippedView(frame: NSRect(x: 0, y: 0, width: Self.W, height: 10))
+        var y: CGFloat = 20
+
+        launchAtLoginCheck.frame = NSRect(x: Self.LX, y: y, width: Self.W - 2 * Self.LX, height: 20)
+        launchAtLoginCheck.state = Settings.launchAtLogin ? .on : .off
+        launchAtLoginCheck.target = self; launchAtLoginCheck.action = #selector(launchAtLoginChanged)
+        pane.addSubview(launchAtLoginCheck); y += 20 + 16
+
+        languageLabel.frame = NSRect(x: Self.LX, y: y + 4, width: 130, height: 18)
+        languagePopup.frame = NSRect(x: Self.CX, y: y, width: Self.CW, height: 26)
         languagePopup.addItems(withTitles: [L10n.t("settings.langSystem"), "English", "한국어"])
         languagePopup.selectItem(at: Settings.language == "en" ? 1 : Settings.language == "ko" ? 2 : 0)
         languagePopup.target = self; languagePopup.action = #selector(languageChanged)
-        content.addSubview(languagePopup)
+        pane.addSubview(languageLabel); pane.addSubview(languagePopup); y += 26 + 16
 
-        fy = row(26); label(themeLabel, fy)
-        themePopup.frame = NSRect(x: CX, y: fy, width: CW, height: 26)
+        keepOpenCheck.frame = NSRect(x: Self.LX, y: y, width: Self.W - 2 * Self.LX, height: 20)
+        keepOpenCheck.state = Settings.closeOnFocusLoss ? .off : .on
+        keepOpenCheck.target = self; keepOpenCheck.action = #selector(keepOpenChanged)
+        pane.addSubview(keepOpenCheck); y += 20 + 20
+
+        pane.frame.size.height = y
+        return pane
+    }
+
+    private func makeAppearancePane() -> NSView {
+        let pane = FlippedView(frame: NSRect(x: 0, y: 0, width: Self.W, height: 10))
+        var y: CGFloat = 20
+
+        themeLabel.frame = NSRect(x: Self.LX, y: y + 4, width: 130, height: 18)
+        themePopup.frame = NSRect(x: Self.CX, y: y, width: Self.CW, height: 26)
         themePopup.addItems(withTitles: Settings.themes)
         themePopup.selectItem(withTitle: Settings.theme)
         themePopup.target = self; themePopup.action = #selector(themeChanged)
-        content.addSubview(themePopup)
+        pane.addSubview(themeLabel); pane.addSubview(themePopup); y += 26 + 16
 
-        fy = row(26); label(bgLabel, fy)
-        bgWell.frame = NSRect(x: CX, y: fy + 1, width: 60, height: 24)
+        bgLabel.frame = NSRect(x: Self.LX, y: y + 3, width: 130, height: 18)
+        bgWell.frame = NSRect(x: Self.CX, y: y, width: 60, height: 24)
         bgWell.color = color(fromHex: Settings.backgroundColor)
         bgWell.target = self; bgWell.action = #selector(bgChanged)
-        content.addSubview(bgWell)
+        pane.addSubview(bgLabel); pane.addSubview(bgWell); y += 26 + 16
 
-        fy = row(28); label(zoomLabel, fy)
-        zoomField.frame = NSRect(x: CX, y: fy + 2, width: 70, height: 24)
+        zoomLabel.frame = NSRect(x: Self.LX, y: y + 4, width: 130, height: 18)
+        zoomField.frame = NSRect(x: Self.CX, y: y, width: 70, height: 24)
         zoomField.integerValue = Settings.defaultZoom
         zoomField.target = self; zoomField.action = #selector(zoomFieldChanged)
-        zoomStepper.frame = NSRect(x: CX + 74, y: fy, width: 20, height: 28)
+        zoomStepper.frame = NSRect(x: Self.CX + 74, y: y, width: 20, height: 26)
         zoomStepper.minValue = 10; zoomStepper.maxValue = 800; zoomStepper.increment = 10
         zoomStepper.integerValue = Settings.defaultZoom
         zoomStepper.target = self; zoomStepper.action = #selector(zoomStepperChanged)
-        content.addSubview(zoomField); content.addSubview(zoomStepper)
+        pane.addSubview(zoomLabel); pane.addSubview(zoomField); pane.addSubview(zoomStepper); y += 26 + 18
 
-        sep()
+        previewHeader.font = .systemFont(ofSize: 11, weight: .semibold)
+        previewHeader.textColor = .tertiaryLabelColor
+        previewHeader.frame = NSRect(x: Self.LX, y: y, width: Self.W - 2 * Self.LX, height: 14)
+        pane.addSubview(previewHeader); y += 14 + 6
 
-        // Shortcut
-        section(secShortcut)
-        fy = row(28)
-        shortcutCheck.frame = NSRect(x: LX, y: fy + 4, width: 300, height: 20)
-        shortcutCheck.state = Settings.shortcutEnabled ? .on : .off
-        shortcutCheck.target = self; shortcutCheck.action = #selector(shortcutEnabledChanged)
-        recorderButton.frame = NSRect(x: W - LX - 130, y: fy, width: 130, height: 26)
-        recorderButton.bezelStyle = .rounded
-        recorderButton.title = Settings.shortcutDisplay
-        recorderButton.target = self; recorderButton.action = #selector(startRecording)
-        content.addSubview(shortcutCheck); content.addSubview(recorderButton)
-
-        sep()
-
-        // Window
-        section(secWindow)
-        fy = row(22)
-        keepOpenCheck.frame = NSRect(x: LX, y: fy + 2, width: W - 2 * LX, height: 20)
-        keepOpenCheck.state = Settings.closeOnFocusLoss ? .off : .on
-        keepOpenCheck.target = self; keepOpenCheck.action = #selector(keepOpenChanged)
-        content.addSubview(keepOpenCheck)
-
-        sep()
-
-        // About
-        section(secAbout)
-        fy = row(24)
-        versionLabel.frame = NSRect(x: LX, y: fy + 3, width: 220, height: 18)
-        versionLabel.textColor = .secondaryLabelColor
-        releasesButton.frame = NSRect(x: W - LX - 150, y: fy - 2, width: 150, height: 26)
-        releasesButton.bezelStyle = .rounded
-        releasesButton.target = self; releasesButton.action = #selector(openReleases)
-        content.addSubview(versionLabel); content.addSubview(releasesButton)
-        fy = row(18)
-        updateStatusLabel.frame = NSRect(x: LX, y: fy + 1, width: W - 2 * LX, height: 16)
-        updateStatusLabel.font = .systemFont(ofSize: 11)
-        content.addSubview(updateStatusLabel)
-
-        sep()
-
-        // Preview
-        section(previewHeader)
-        webView = WKWebView(frame: NSRect(x: LX, y: 16, width: W - 2 * LX, height: max(120, y - 16)))
+        let previewH: CGFloat = 200
+        webView = WKWebView(frame: NSRect(x: Self.LX, y: y, width: Self.W - 2 * Self.LX, height: previewH))
         webView.navigationDelegate = self
         webView.wantsLayer = true
         webView.layer?.borderColor = NSColor.separatorColor.cgColor
@@ -180,26 +189,110 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
             comps?.fragment = "preview"
             webView.loadFileURL(comps?.url ?? url, allowingReadAccessTo: url.deletingLastPathComponent())
         }
-        content.addSubview(webView)
+        pane.addSubview(webView); y += previewH + 20
 
-        win.contentView = content
-        self.window = win
-        relabel()
+        pane.frame.size.height = y
+        return pane
     }
+
+    private func makeShortcutPane() -> NSView {
+        let pane = FlippedView(frame: NSRect(x: 0, y: 0, width: Self.W, height: 10))
+        var y: CGFloat = 20
+
+        shortcutCheck.frame = NSRect(x: Self.LX, y: y, width: Self.W - 2 * Self.LX, height: 20)
+        shortcutCheck.state = Settings.shortcutEnabled ? .on : .off
+        shortcutCheck.target = self; shortcutCheck.action = #selector(shortcutEnabledChanged)
+        pane.addSubview(shortcutCheck); y += 20 + 14
+
+        recorderButton.frame = NSRect(x: Self.LX, y: y, width: 150, height: 26)
+        recorderButton.bezelStyle = .rounded
+        recorderButton.title = Settings.shortcutDisplay
+        recorderButton.target = self; recorderButton.action = #selector(startRecording)
+        pane.addSubview(recorderButton); y += 26 + 20
+
+        pane.frame.size.height = y
+        return pane
+    }
+
+    private func makeAboutPane() -> NSView {
+        let pane = FlippedView(frame: NSRect(x: 0, y: 0, width: Self.W, height: 10))
+        var y: CGFloat = 24
+
+        versionLabel.frame = NSRect(x: Self.LX, y: y + 3, width: 240, height: 18)
+        versionLabel.textColor = .secondaryLabelColor
+        releasesButton.frame = NSRect(x: Self.W - Self.LX - 150, y: y, width: 150, height: 26)
+        releasesButton.bezelStyle = .rounded
+        releasesButton.target = self; releasesButton.action = #selector(openReleases)
+        pane.addSubview(versionLabel); pane.addSubview(releasesButton); y += 26 + 12
+
+        updateStatusLabel.frame = NSRect(x: Self.LX, y: y, width: Self.W - 2 * Self.LX, height: 16)
+        updateStatusLabel.font = .systemFont(ofSize: 11)
+        pane.addSubview(updateStatusLabel); y += 16 + 20
+
+        pane.frame.size.height = y
+        return pane
+    }
+
+    // MARK: - Tab switching
+
+    private func select(_ tab: Tab, animate: Bool) {
+        guard let win = window, let pane = panes[tab] else { return }
+        current = tab
+        win.title = L10n.t(tab.labelKey)
+        let h = pane.frame.height
+        pane.frame = NSRect(x: 0, y: 0, width: Self.W, height: h)
+        win.contentView = pane
+
+        // Resize the window to the pane height, keeping the top-left corner fixed.
+        var frame = win.frameRect(forContentRect: NSRect(x: 0, y: 0, width: Self.W, height: h))
+        let top = win.frame.maxY
+        frame.origin.x = win.frame.origin.x
+        frame.origin.y = top - frame.height
+        win.setFrame(frame, display: true, animate: animate)
+
+        if tab == .appearance { updatePreview() }
+    }
+
+    @objc private func toolbarItemSelected(_ sender: NSToolbarItem) {
+        guard let tab = Tab(rawValue: sender.itemIdentifier.rawValue) else { return }
+        window?.toolbar?.selectedItemIdentifier = sender.itemIdentifier
+        select(tab, animate: true)
+    }
+
+    // MARK: - NSToolbarDelegate
+
+    func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier,
+                 willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
+        guard let tab = Tab(rawValue: identifier.rawValue) else { return nil }
+        let item = NSToolbarItem(itemIdentifier: identifier)
+        item.image = NSImage(systemSymbolName: tab.symbol, accessibilityDescription: nil)
+        item.label = L10n.t(tab.labelKey)
+        item.target = self
+        item.action = #selector(toolbarItemSelected(_:))
+        toolbarItems[tab] = item
+        return item
+    }
+
+    private var tabIdentifiers: [NSToolbarItem.Identifier] {
+        Tab.allCases.map { NSToolbarItem.Identifier($0.rawValue) }
+    }
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] { tabIdentifiers }
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] { tabIdentifiers }
+    func toolbarSelectableItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] { tabIdentifiers }
+
+    // MARK: - Localized labels
 
     /// Re-apply localized strings (build time + on language change).
     private func relabel() {
-        window?.title = L10n.t("settings.title")
-        secAppearance.stringValue = L10n.t("settings.secAppearance")
-        secShortcut.stringValue = L10n.t("settings.secShortcut")
-        secWindow.stringValue = L10n.t("settings.secWindow")
-        secAbout.stringValue = L10n.t("settings.secAbout")
+        for (tab, item) in toolbarItems { item.label = L10n.t(tab.labelKey) }
+        window?.title = L10n.t(current.labelKey)
         previewHeader.stringValue = L10n.t("settings.preview")
         languageLabel.stringValue = L10n.t("settings.language")
         languagePopup.item(at: 0)?.title = L10n.t("settings.langSystem")
         themeLabel.stringValue = L10n.t("settings.theme")
         zoomLabel.stringValue = L10n.t("settings.zoom")
         bgLabel.stringValue = L10n.t("settings.bg")
+        launchAtLoginCheck.title = L10n.t("settings.launchAtLogin")
         shortcutCheck.title = L10n.t("settings.shortcut")
         keepOpenCheck.title = L10n.t("settings.keepOpen")
         versionLabel.stringValue = "\(L10n.t("settings.version")) \(Self.appVersion)"
@@ -283,6 +376,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
     }
     @objc private func keepOpenChanged() {
         Settings.closeOnFocusLoss = (keepOpenCheck.state == .off)
+    }
+    @objc private func launchAtLoginChanged() {
+        Settings.launchAtLogin = (launchAtLoginCheck.state == .on)
+        // Reflect the real resulting state — registration can fail (then it stays off).
+        launchAtLoginCheck.state = Settings.launchAtLogin ? .on : .off
     }
     @objc private func bgChanged() {
         Settings.backgroundColor = hex(from: bgWell.color)
