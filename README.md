@@ -24,10 +24,11 @@ Services, or pipe via CLI) → diagram. Think Quick Look, not Preview.app.
 
 - **Render from anywhere** — system Services menu, a global keyboard shortcut, or the `qmmd` CLI.
 - **Source priority** — uses the current selection; falls back to the clipboard; shows nothing if there is no renderable text.
-- **Zoom & pan** — buttons, `⌘+ / ⌘− / ⌘0`, `⌘`+scroll, trackpad pinch; drag to pan; auto-centered.
+- **Zoom, pan & fit** — buttons, `⌘+ / ⌘− / ⌘0`, `⌘`+scroll, trackpad pinch; drag to pan; **fit-to-window** button or `Space` re-fits the diagram after you resize the window.
 - **Themes & background** — pick a Mermaid theme and a canvas background color.
-- **Source view** — toggle the original Mermaid text with syntax highlighting.
+- **Source view** — toggle the original source text with syntax highlighting; copy the **code** from here.
 - **PNG export** — copy (`⌘C`) or save (`⌘S`) the **diagram only** (no toolbar, full size even off-screen).
+- **Recent history** — recently rendered diagrams are kept with thumbnails; reopen one, **copy its image**, or delete it from the list.
 - **PlantUML too** — source that starts with `@startuml…@enduml` (and other `@start…` diagrams) is auto-detected and rendered by a vendored offline PlantUML engine. Mermaid stays the primary focus.
 - **Offline** — Mermaid and the PlantUML engine are vendored; no network required.
 
@@ -86,8 +87,10 @@ works everywhere, including Chrome.
 ### In the panel
 
 - **Zoom**: `⌘+ / ⌘− / ⌘0`, `⌘`+scroll, pinch, or the toolbar buttons; drag to pan.
-- **`</> Source`**: show the original Mermaid text, syntax-highlighted.
+- **Fit to window** (toolbar button or `Space`): re-fit the diagram to the current window size — handy after enlarging the window.
+- **`</> Source`**: show the original source text, syntax-highlighted (Mermaid or PlantUML); here Copy / `⌘C` copies the **code**.
 - **Copy PNG / `⌘C`**, **Save PNG / `⌘S`**: export the diagram only.
+- **History**: hover a recent-diagram row to **copy its image** or delete it; click it to reopen.
 - **Esc** or click outside to close (configurable in Settings).
 
 ### Settings
