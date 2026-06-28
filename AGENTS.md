@@ -21,10 +21,36 @@ See `README.md` for user-facing docs and `docs/specs/` for design notes.
   (Viz.js/Graphviz, ~1.4MB). Do not add SwiftPM/CocoaPods deps or load anything
   from the network at runtime. See "Vendoring the PlantUML engine" below before
   updating those two files.
+- **Always vet licenses before vendoring.** Any open-source code added to the
+  bundle must have its license checked and confirmed compatible with this project's
+  MIT license *before* it ships — check the upstream source-of-truth (repo
+  `LICENSE`/README, not just a website), since a project may be multi-licensed.
+  Permissive (MIT/BSD/Apache-2.0) and weak/file-level copyleft in object form
+  (EPL, LGPL) are fine; avoid strong copyleft (GPL) unless a permissive option is
+  offered. Record every bundled component, its license, and any required notice in
+  `THIRD-PARTY-LICENSES.md`, and ship that file inside the `.app`.
 - **Offline.** Everything must work with no network.
 - **No Xcode IDE.** Build from the CLI only (`build.sh`). Do not introduce an
   `.xcodeproj` or require opening Xcode.
 - **Keep it small.** Prefer the simplest thing that works over abstraction.
+- **Stay lightweight — treat weight as a signal.** This is a focused diagram
+  *viewer*, not a Swiss-army app. When something grows — bundle/`.app` size, launch
+  or render latency, memory, the number of vendored engines, or the breadth of
+  features — stop and ask: *is the app doing too much? should this be split out
+  (a separate mode, tool, or app) instead of piled on here?* Prefer cutting or
+  extracting over accreting. A new capability earns its place only if it fits the
+  "render selected diagram source" purpose and its cost is contained (e.g. lazy-load
+  heavy engines so users who don't need them don't pay for them). **Signals to stop
+  and reconsider — split or cut rather than accrete:**
+  - Adding *another* multi-MB renderer (D2, native Graphviz, Excalidraw, …): a
+    renderer-plugin split or separate builds beats one ballooning bundle.
+  - Adding a capability that isn't "view a diagram from source" (editing, cloud,
+    sharing, accounts): that belongs in a separate mode/app.
+  - Perceptible launch/render latency or memory growth on the common path.
+
+  Reassess weight on every heavy addition. Current baseline: `.app` ~13MB, almost all
+  of it vendored JS (Mermaid ~3.2MB + the lazy-loaded PlantUML engine ~8.7MB); the
+  Swift binary is ~330KB.
 
 ## Build, run, verify
 
@@ -108,6 +134,12 @@ Run long/log-heavy builds via a subagent when possible to keep the main context 
 - **Toolbar readout.** After a successful render, `#meta` (next to the reset button)
   shows the engine (`Mermaid`/`PlantUML`) and render time via `setMeta()`; it's hidden
   on empty/error states. History rows show the same engine badge.
+- **Source view is engine-aware.** `renderSource()` picks the highlighter by
+  `activeEngine` (`highlight` for Mermaid, `highlightPlantUML` for PlantUML — a
+  single-pass tokenizer so inserted spans aren't re-scanned). In the source view the
+  toolbar adapts: Copy stays enabled and copies the source **text** (`copyText` →
+  Swift writes it to the pasteboard), while Save and the zoom controls are disabled
+  (they only apply to the diagram).
 
 ### Vendoring the PlantUML engine
 
