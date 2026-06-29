@@ -88,7 +88,7 @@ works everywhere, including Chrome.
 
 - **Zoom**: `⌘+ / ⌘− / ⌘0`, `⌘`+scroll, pinch, or the toolbar buttons; drag to pan.
 - **Fit to window** (toolbar button or `Space`): re-fit the diagram to the current window size — handy after enlarging the window.
-- **`</> Source`**: show the original source text, syntax-highlighted (Mermaid or PlantUML); here Copy / `⌘C` copies the **code**.
+- **`</> Source`** (toolbar button or `/`): toggle the original source text, syntax-highlighted (Mermaid or PlantUML); here Copy / `⌘C` copies the **code**. Press `/` again to return to the diagram. (Unavailable while History is open.)
 - **Copy PNG / `⌘C`**, **Save PNG / `⌘S`**: export the diagram only.
 - **History**: hover a recent-diagram row to **copy its image** or delete it; click it to reopen.
 - **Esc** or click outside to close (configurable in Settings).

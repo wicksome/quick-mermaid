@@ -33,6 +33,8 @@ Scope: what happens once source text is being rendered/viewed. How text gets in
 ### Source view
 - The user can toggle a view of the original source text, **syntax-highlighted for its
   language** (Mermaid or PlantUML).
+- The source view toggles via the toolbar button **or the `/` key** — pressing `/` from
+  the diagram opens it, pressing `/` again returns to the diagram.
 - In the source view, **Copy copies the source text** (and the button/tooltip say so).
 - In the source view, Save and the zoom controls are unavailable (they apply to the
   diagram, which isn't on screen).
@@ -52,6 +54,8 @@ Scope: what happens once source text is being rendered/viewed. How text gets in
 - On hover, a row offers **copying that diagram as an image** (and deleting it) — copying
   stays in the history list, it does not navigate away.
 - The user can delete history items.
+- While history is open, the **source view is unavailable** — the source button is
+  disabled and the `/` key is ignored (no single diagram is selected to show source for).
 
 ### Footprint
 - Mermaid-only sessions never load the PlantUML engine; it loads on the first PlantUML
