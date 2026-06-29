@@ -22,6 +22,8 @@ enum L10n {
         "settings.theme":    ["ko": "기본 테마",                      "en": "Default theme"],
         "settings.zoom":     ["ko": "기본 확대율 (%)",                "en": "Default zoom (%)"],
         "settings.bg":       ["ko": "배경색",                         "en": "Background"],
+        "settings.font":     ["ko": "글꼴",                           "en": "Font"],
+        "settings.fontDefault":["ko": "기본",                        "en": "Default"],
         "settings.shortcut": ["ko": "단축키로 선택 영역 다이어그램 보기", "en": "Render selection via shortcut"],
         "settings.keepOpen": ["ko": "포커스를 잃어도 창을 닫지 않기",     "en": "Keep window open when focus is lost"],
         "settings.version":  ["ko": "버전",                           "en": "Version"],
