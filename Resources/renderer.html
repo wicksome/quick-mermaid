@@ -172,7 +172,7 @@
     <span id="meta"><span class="eng"></span><span class="ms"></span></span>
     <span class="spacer"></span>
     <button id="histBtn" title="Recent diagrams"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></button>
-    <button id="srcBtn" title="Show source text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
+    <button id="srcBtn" title="Show source (/)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
     <button id="saveBtn" title="Save as PNG (⌘S)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
     <button id="copyBtn" title="Copy image (⌘C)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
   </div>
@@ -223,7 +223,7 @@
         pumlLoading: 'PlantUML 엔진 준비 중…', pumlLoadingSub: '처음 한 번 엔진을 불러오는 중입니다.',
         copied: '복사됨', saved: '저장됨', copyDone: '✓ 복사됨',
         tipZoomOut: '축소 (⌘−)', tipZoomIn: '확대 (⌘+)', tipReset: '맞춤 (⌘0)', tipFit: '창에 맞춤 (Space)',
-        tipHistory: '최근 다이어그램', tipSource: '소스 보기',
+        tipHistory: '최근 다이어그램', tipSource: '소스 보기 (/)',
         tipSave: '이미지 저장 (⌘S)', tipCopy: '이미지 복사 (⌘C)', tipCopyCode: '코드 복사 (⌘C)',
         histEmpty: '최근 다이어그램이 없어요',
         today: '오늘', yesterday: '어제', delete: '삭제'
@@ -237,7 +237,7 @@
         pumlLoading: 'Preparing the PlantUML engine…', pumlLoadingSub: 'Loading the engine for the first time.',
         copied: 'Copied', saved: 'Saved', copyDone: '✓ Copied',
         tipZoomOut: 'Zoom out (⌘−)', tipZoomIn: 'Zoom in (⌘+)', tipReset: 'Fit (⌘0)', tipFit: 'Fit to window (Space)',
-        tipHistory: 'Recent diagrams', tipSource: 'Show source',
+        tipHistory: 'Recent diagrams', tipSource: 'Show source (/)',
         tipSave: 'Save image (⌘S)', tipCopy: 'Copy image (⌘C)', tipCopyCode: 'Copy code (⌘C)',
         histEmpty: 'No recent diagrams',
         today: 'Today', yesterday: 'Yesterday', delete: 'Delete'
@@ -1024,6 +1024,8 @@
       ok('history.slash.ignored', sourceOpen === false && historyOpen === true);
       toggleHistory();
       ok('history.srcBtn.reenabled', $('srcBtn').disabled === false);
+      // the source button's tooltip advertises its "/" shortcut
+      ok('slash.tooltip', $('srcBtn').title === L.tipSource && L.tipSource.indexOf('/') !== -1);
 
       // history: objects {code, ts}, date group headers, open/load/delete
       var nowS = Date.now() / 1000;
