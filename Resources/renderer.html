@@ -855,6 +855,7 @@
       copyBtn.disabled = copyOff;
       copyBtn.title = sourceOpen ? L.tipCopyCode : L.tipCopy;   // source view copies code, not the image
       document.getElementById('saveBtn').disabled = exportBlocked();
+      document.getElementById('srcBtn').disabled = historyOpen;   // source view is unavailable while history is open
       var zoomOff = sourceOpen || historyOpen;   // zoom only applies to the diagram
       document.getElementById('zoomIn').disabled = zoomOff;
       document.getElementById('zoomOut').disabled = zoomOff;
@@ -1009,6 +1010,21 @@
       ok('export.enabled.afterSource', $('copyBtn').disabled === false && $('saveBtn').disabled === false && $('zoomIn').disabled === false);
       ok('diagram.copy.tooltip', $('copyBtn').title === L.tipCopy);
 
+      // "/" toggles the source view (diagram view only); pressing it again returns to the diagram
+      lastCode = 'graph TD\n  A-->B'; await doRender();
+      ok('slash.startsDiagram', sourceOpen === false);
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '/' }));
+      ok('slash.opensSource', sourceOpen === true && $('source').style.display === 'block');
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '/' }));
+      ok('slash.closesSource', sourceOpen === false && $('source').style.display === 'none');
+      // history view disables source: the source button is disabled and "/" is ignored
+      toggleHistory();
+      ok('history.srcBtn.disabled', $('srcBtn').disabled === true);
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '/' }));
+      ok('history.slash.ignored', sourceOpen === false && historyOpen === true);
+      toggleHistory();
+      ok('history.srcBtn.reenabled', $('srcBtn').disabled === false);
+
       // history: objects {code, ts}, date group headers, open/load/delete
       var nowS = Date.now() / 1000;
       setHistory([
@@ -1137,6 +1153,12 @@
       // scroll the source/history content).
       if ((e.key === ' ' || e.key === 'Spacebar') && !e.metaKey) {
         if (!sourceOpen && !historyOpen) { e.preventDefault(); fitView(); }
+        return;
+      }
+      // "/" toggles the source (code) view — diagram view only. Ignored while history
+      // is open, where the source button is disabled too (no diagram is selected).
+      if (e.key === '/' && !e.metaKey) {
+        if (!historyOpen) { e.preventDefault(); toggleSource(); }
         return;
       }
       if (!e.metaKey) return;
