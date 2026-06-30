@@ -106,6 +106,18 @@ icon) to put the link on your clipboard.
 > network, nothing fetched. Very large diagrams make very long URLs; some apps
 > truncate long links, so for big diagrams prefer the source directly.
 
+#### Use it with Claude (or any AI assistant)
+
+When an assistant hands you Mermaid, it can append a clickable QuickMermaid link
+so you view the diagram in one click. Add a rule like this to the assistant's
+instructions (e.g. Claude Code's `CLAUDE.md`):
+
+```text
+After every Mermaid/PlantUML code block you output, append a clickable link below it:
+  [▶ Open in QuickMermaid](quickmermaid://render?data=<base64url>)
+Get the URL via `printf '%s' "$SRC" | qmmd --link` (SRC = the fenced source).
+```
+
 ### In the panel
 
 - **Zoom**: `⌘+ / ⌘− / ⌘0`, `⌘`+scroll, pinch, or the toolbar buttons; drag to pan.
