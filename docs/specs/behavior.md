@@ -41,6 +41,9 @@ Scope: what happens once source text is being rendered/viewed. How text gets in
 
 ### Diagram view
 - Copy / Save export the **diagram image** (diagram only, full size regardless of zoom).
+- A **Copy as link** control copies a `quickmermaid://` link carrying the current
+  source. It's available whenever there is source (the diagram and source views) and
+  is disabled in the history view (no single diagram is selected there).
 - Zoom (buttons, shortcuts, wheel, pinch) acts on the diagram.
 - A **fit-to-window** control (and the **Space** key) re-fits the diagram to the current
   window size — e.g. after the user enlarges the window. It's disabled/inactive in the
@@ -94,3 +97,5 @@ Scope: what happens once source text is being rendered/viewed. How text gets in
 - The font is applied to the diagram only. The source view must show the **original**
   source — the injected `skinparam defaultFontName` (or any preamble directive) must
   never appear in the source overlay or in the copied source text.
+- A copied `quickmermaid://` link must carry the **original** source too — never the
+  font-injected preamble, and decoding it back must reproduce the source exactly.

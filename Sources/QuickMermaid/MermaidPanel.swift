@@ -10,7 +10,7 @@ final class QuickPanel: NSPanel {
 
 /// JS → Swift message channels. Names must match `webkit.messageHandlers.*` in renderer.html.
 private enum ScriptMessage: String, CaseIterable {
-    case result, copyPNG, savePNG, openSettings, testResult, deleteHistory, copyText
+    case result, copyPNG, savePNG, openSettings, testResult, deleteHistory, copyText, copyLink
 }
 
 /// Renders mermaid text in a WKWebView and displays it in a floating panel.
@@ -241,6 +241,14 @@ final class MermaidPanelController: NSObject, WKNavigationDelegate, WKScriptMess
                 pb.clearContents()
                 pb.setString(text, forType: .string)
                 webView.evaluateJavaScript("window.copied && window.copied()", completionHandler: nil)
+            }
+        case .copyLink:
+            // Encode the diagram's source as a quickmermaid:// link and put it on the pasteboard.
+            if let text = message.body as? String, let url = URLScheme.encode(text: text) {
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.setString(url.absoluteString, forType: .string)
+                webView.evaluateJavaScript("window.linkCopied && window.linkCopied()", completionHandler: nil)
             }
         case .savePNG:
             savePNG()

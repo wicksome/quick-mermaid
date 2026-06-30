@@ -92,8 +92,9 @@ Run long/log-heavy builds via a subagent when possible to keep the main context 
 
 | File | Responsibility |
 |------|----------------|
-| `Sources/QuickMermaid/main.swift` | Entry; mode dispatch via args (`--stdin`, `--settings`, `--selftest`, else service) |
-| `AppDelegate.swift` | Menu-bar item, Services registration, CLI/Settings modes, global hotkey wiring + Accessibility prompt |
+| `Sources/QuickMermaid/main.swift` | Entry; mode dispatch via args (`--stdin`, `--settings`, `--selftest`, `--test`, `--encode`, else service) |
+| `AppDelegate.swift` | Menu-bar item, Services registration, CLI/Settings modes, `quickmermaid://` URL handler, global hotkey wiring + Accessibility prompt |
+| `URLScheme.swift` | `quickmermaid://render?data=<base64url>` encode/decode (pure; clickable diagram links + `--encode`) |
 | `ServicesProvider.swift` | `@objc renderMermaid` Services handler |
 | `MermaidPanel.swift` | Floating `NSPanel` + `WKWebView`; render injection; PNG copy/save via offscreen SVG render |
 | `HotkeyManager.swift` | Carbon `RegisterEventHotKey` global shortcut |
@@ -109,8 +110,11 @@ Run long/log-heavy builds via a subagent when possible to keep the main context 
 ### renderer.html contract (Swift ↔ JS)
 
 - Swift calls `window.render(code, theme, zoomPercent, bg, lang)`.
-- Swift posts to message handlers: `result` (selftest), `copyPNG`, `savePNG`.
-- JS calls back `window.copied()` / `window.saved()` after Swift confirms the action.
+- Swift posts to message handlers: `result` (selftest), `copyPNG`, `savePNG`,
+  `copyText` (source-view code copy), `copyLink` (Copy-as-link: posts the source;
+  Swift encodes the `quickmermaid://` URL and writes it to the pasteboard).
+- JS calls back `window.copied()` / `window.saved()` / `window.linkCopied()` after
+  Swift confirms the action.
 - `window.exportData()` returns `{svg, w, h, bg}` for diagram-only PNG export.
 - `#preview` in the URL hash hides the toolbar (used by the Settings preview).
 - Mermaid runs with `suppressErrorRendering: true`; the app draws its own
@@ -214,6 +218,14 @@ to upstream. To update:
   auto-update (Sparkle) is out of scope unless signing/notarization is added.
 - Settings can be changed from a separate process (`qmmd --settings`); the
   resident app re-reads them via a `DistributedNotification` to re-register the hotkey.
+- **`quickmermaid://` links only route once LaunchServices knows the app** — i.e. after
+  it's been launched/installed at least once (`--install` registers `/Applications`).
+  A cold launch *from* a clicked link delivers the URL via `application(_:open:)`
+  **after** `applicationDidFinishLaunching`; the service-mode launch would otherwise pop
+  the Settings window, so that open is deferred a tick and cancelled when a URL arrives
+  (`didOpenURLOnLaunch`). The link payload is just the diagram source (base64url) — no
+  code execution, same render path as any other input source — but it's opaque to the
+  clicker, unlike pasted text.
 
 ## Git conventions
 

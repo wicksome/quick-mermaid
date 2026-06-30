@@ -175,6 +175,7 @@
     <button id="srcBtn" title="Show source (/)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
     <button id="saveBtn" title="Save as PNG (⌘S)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
     <button id="copyBtn" title="Copy image (⌘C)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+    <button id="linkBtn" title="Copy as link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></button>
   </div>
 
   <div id="stage">
@@ -221,10 +222,10 @@
         loadFail: 'mermaid.js 로드 실패', loadFailSub: 'mermaid.min.js 를 찾지 못했습니다.',
         pumlLoadFail: 'PlantUML 엔진 로드 실패', pumlLoadFailSub: 'plantuml.js / viz-global.js 를 찾지 못했습니다.',
         pumlLoading: 'PlantUML 엔진 준비 중…', pumlLoadingSub: '처음 한 번 엔진을 불러오는 중입니다.',
-        copied: '복사됨', saved: '저장됨', copyDone: '✓ 복사됨',
+        copied: '복사됨', saved: '저장됨', copyDone: '✓ 복사됨', linkCopied: '링크 복사됨',
         tipZoomOut: '축소 (⌘−)', tipZoomIn: '확대 (⌘+)', tipReset: '맞춤 (⌘0)', tipFit: '창에 맞춤 (Space)',
         tipHistory: '최근 다이어그램', tipSource: '소스 보기 (/)',
-        tipSave: '이미지 저장 (⌘S)', tipCopy: '이미지 복사 (⌘C)', tipCopyCode: '코드 복사 (⌘C)',
+        tipSave: '이미지 저장 (⌘S)', tipCopy: '이미지 복사 (⌘C)', tipCopyCode: '코드 복사 (⌘C)', tipCopyLink: '링크로 복사',
         histEmpty: '최근 다이어그램이 없어요',
         today: '오늘', yesterday: '어제', delete: '삭제'
       },
@@ -235,10 +236,10 @@
         loadFail: 'Failed to load mermaid.js', loadFailSub: 'mermaid.min.js was not found.',
         pumlLoadFail: 'Failed to load the PlantUML engine', pumlLoadFailSub: 'plantuml.js / viz-global.js was not found.',
         pumlLoading: 'Preparing the PlantUML engine…', pumlLoadingSub: 'Loading the engine for the first time.',
-        copied: 'Copied', saved: 'Saved', copyDone: '✓ Copied',
+        copied: 'Copied', saved: 'Saved', copyDone: '✓ Copied', linkCopied: 'Link copied',
         tipZoomOut: 'Zoom out (⌘−)', tipZoomIn: 'Zoom in (⌘+)', tipReset: 'Fit (⌘0)', tipFit: 'Fit to window (Space)',
         tipHistory: 'Recent diagrams', tipSource: 'Show source (/)',
-        tipSave: 'Save image (⌘S)', tipCopy: 'Copy image (⌘C)', tipCopyCode: 'Copy code (⌘C)',
+        tipSave: 'Save image (⌘S)', tipCopy: 'Copy image (⌘C)', tipCopyCode: 'Copy code (⌘C)', tipCopyLink: 'Copy as link',
         histEmpty: 'No recent diagrams',
         today: 'Today', yesterday: 'Yesterday', delete: 'Delete'
       }
@@ -260,6 +261,7 @@
       $('srcBtn').title = L.tipSource;
       $('saveBtn').title = L.tipSave;
       $('copyBtn').title = sourceOpen ? L.tipCopyCode : L.tipCopy;
+      $('linkBtn').title = L.tipCopyLink;
       if (historyOpen) renderHistory();
     }
 
@@ -855,6 +857,9 @@
       copyBtn.disabled = copyOff;
       copyBtn.title = sourceOpen ? L.tipCopyCode : L.tipCopy;   // source view copies code, not the image
       document.getElementById('saveBtn').disabled = exportBlocked();
+      // "Copy as link" carries the source text, so it tracks lastCode (works in the
+      // source view too); only the history view — where lastCode is stale — disables it.
+      document.getElementById('linkBtn').disabled = historyOpen || !lastCode;
       document.getElementById('srcBtn').disabled = historyOpen;   // source view is unavailable while history is open
       var zoomOff = sourceOpen || historyOpen;   // zoom only applies to the diagram
       document.getElementById('zoomIn').disabled = zoomOff;
@@ -885,8 +890,16 @@
     // applies to the diagram view — copying source text is always user-initiated.
     function keyboardCopy() { if (!sourceOpen && now() < suppressKeyCopyUntil) return; doCopy(); }
     function doSave() { if (exportBlocked()) return; try { window.webkit.messageHandlers.savePNG.postMessage({}); } catch (e) {} }
+    // "Copy as link": hand the current source to Swift, which encodes a
+    // quickmermaid://render?data=… URL and writes it to the pasteboard.
+    function doCopyLink() {
+      if (historyOpen || !lastCode) return;
+      if (__onCopy) { __onCopy('link'); return; }
+      try { window.webkit.messageHandlers.copyLink.postMessage(lastCode); } catch (e) {}
+    }
     document.getElementById('copyBtn').onclick = doCopy;
     document.getElementById('saveBtn').onclick = doSave;
+    document.getElementById('linkBtn').onclick = doCopyLink;
 
     var toastTimer = null;
     function showToast(text) {
@@ -904,6 +917,7 @@
     // Swift completion callbacks
     window.copied = function () { flashButton('copyBtn'); showToast(L.copied); };
     window.saved  = function () { showToast(L.saved); };
+    window.linkCopied = function () { flashButton('linkBtn'); showToast(L.linkCopied); };
 
     applyI18n();
 
@@ -1009,6 +1023,21 @@
       // back to the diagram: copy/save/zoom all re-enabled, tooltip back to "copy image"
       ok('export.enabled.afterSource', $('copyBtn').disabled === false && $('saveBtn').disabled === false && $('zoomIn').disabled === false);
       ok('diagram.copy.tooltip', $('copyBtn').title === L.tipCopy);
+
+      // "Copy as link": enabled whenever there's source (diagram + source views),
+      // posts the source to Swift (which encodes the quickmermaid:// URL), disabled in history
+      lastCode = 'graph TD\n  A-->B'; await doRender();
+      ok('link.enabled.diagram', $('linkBtn').disabled === false);
+      var linkKind = null; __onCopy = function (k) { linkKind = k; };
+      doCopyLink();
+      ok('link.copy.posts', linkKind === 'link');
+      __onCopy = null;
+      toggleSource();
+      ok('link.enabled.source', $('linkBtn').disabled === false);
+      toggleSource();
+      toggleHistory();
+      ok('link.disabled.history', $('linkBtn').disabled === true);
+      toggleHistory();
 
       // "/" toggles the source view (diagram view only); pressing it again returns to the diagram
       lastCode = 'graph TD\n  A-->B'; await doRender();

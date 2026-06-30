@@ -10,6 +10,20 @@ enum AppMode {
 }
 
 let args = CommandLine.arguments
+
+// --encode: read source from stdin, print a quickmermaid:// link, exit.
+// Pure text transform — no GUI, so it runs before NSApplication is created.
+if args.contains("--encode") {
+    let data = FileHandle.standardInput.readDataToEndOfFile()
+    let text = String(data: data, encoding: .utf8) ?? ""
+    guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+          let url = URLScheme.encode(text: text) else {
+        exit(1)
+    }
+    print(url.absoluteString)
+    exit(0)
+}
+
 let mode: AppMode
 if args.contains("--test") {
     mode = .test

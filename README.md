@@ -29,6 +29,7 @@ Services, or pipe via CLI) → diagram. Think Quick Look, not Preview.app.
 - **Source view** — toggle the original source text with syntax highlighting; copy the **code** from here.
 - **PNG export** — copy (`⌘C`) or save (`⌘S`) the **diagram only** (no toolbar, full size even off-screen).
 - **Recent history** — recently rendered diagrams are kept with thumbnails; reopen one, **copy its image**, or delete it from the list.
+- **Shareable links** — copy a diagram as a `quickmermaid://` link (toolbar button or `qmmd --link`); clicking that link in any app renders the diagram.
 - **PlantUML too** — source that starts with `@startuml…@enduml` (and other `@start…` diagrams) is auto-detected and rendered by a vendored offline PlantUML engine. Mermaid stays the primary focus.
 - **Offline** — Mermaid and the PlantUML engine are vendored; no network required.
 
@@ -84,12 +85,34 @@ works everywhere, including Chrome.
 > it). Until you do, the shortcut still renders the clipboard but can't grab
 > selections.
 
+### D) Clickable links — `quickmermaid://`
+
+QuickMermaid registers a `quickmermaid://render?data=<base64url>` URL scheme, so a
+diagram can travel as a clickable link. Click one in any app (notes, Slack, a
+Markdown preview, the terminal) and the diagram renders — no need to copy the
+source first.
+
+Create a link from existing source:
+
+```bash
+pbpaste | qmmd --link     # print a quickmermaid:// link for the clipboard
+qmmd --link flow.mmd      # …for a file
+```
+
+…or, while viewing a diagram, use the **Copy as link** toolbar button (the chain
+icon) to put the link on your clipboard.
+
+> The payload is just the diagram source, base64url-encoded in the URL — no
+> network, nothing fetched. Very large diagrams make very long URLs; some apps
+> truncate long links, so for big diagrams prefer the source directly.
+
 ### In the panel
 
 - **Zoom**: `⌘+ / ⌘− / ⌘0`, `⌘`+scroll, pinch, or the toolbar buttons; drag to pan.
 - **Fit to window** (toolbar button or `Space`): re-fit the diagram to the current window size — handy after enlarging the window.
 - **`</> Source`** (toolbar button or `/`): toggle the original source text, syntax-highlighted (Mermaid or PlantUML); here Copy / `⌘C` copies the **code**. Press `/` again to return to the diagram. (Unavailable while History is open.)
 - **Copy PNG / `⌘C`**, **Save PNG / `⌘S`**: export the diagram only.
+- **Copy as link** (chain icon): copy a `quickmermaid://` link carrying the source — available in the diagram and source views.
 - **History**: hover a recent-diagram row to **copy its image** or delete it; click it to reopen.
 - **Esc** or click outside to close (configurable in Settings).
 
