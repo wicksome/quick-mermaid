@@ -8,6 +8,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var services: ServicesProvider?
     private let settings = SettingsWindowController()
     private let hotkey = HotkeyManager()
+    /// Set when a quickmermaid:// URL is opened during launch, so the cold-launch
+    /// Settings window (which would otherwise pop in front of the rendered diagram)
+    /// is suppressed. See `application(_:open:)`.
+    private var didOpenURLOnLaunch = false
 
     init(mode: AppMode) {
         self.mode = mode
@@ -43,7 +47,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // main window otherwise. Suppressed for the silent login launch: when
             // launch-at-login is on, a cold launch is the one the system did at
             // login. A manual re-launch while running goes through reopen below.
-            if !Settings.launchAtLogin { openSettings() }
+            // Deferred a tick so a quickmermaid:// cold launch — whose open(_:)
+            // arrives right after this — can cancel it (render, don't pop Settings).
+            if !Settings.launchAtLogin {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, !self.didOpenURLOnLaunch else { return }
+                    self.openSettings()
+                }
+            }
         }
     }
 
@@ -51,6 +62,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if case .service = mode { openSettings() }
         return true
+    }
+
+    // MARK: - URL scheme (quickmermaid://)
+
+    /// LaunchServices delivers clicked `quickmermaid://render?data=…` links here
+    /// (cold launch → after didFinishLaunching; running app → routed to this instance).
+    /// The decoded source renders just like any other input source.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard case .service = mode else { return }
+        for url in urls {
+            guard let code = URLScheme.decode(url: url),
+                  !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+            didOpenURLOnLaunch = true
+            panel.show(code: code)
+        }
     }
 
     private static var appVersion: String {

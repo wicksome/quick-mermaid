@@ -3,6 +3,7 @@
 #   pbpaste | qmmd        # render from pipe (stdin)
 #   qmmd flow.mmd a.mmd   # render files
 #   qmmd                  # run with no input → settings window
+#   pbpaste | qmmd --link # print a clickable quickmermaid:// link instead of rendering
 set -euo pipefail
 
 BIN="/Applications/QuickMermaid.app/Contents/MacOS/QuickMermaid"
@@ -11,7 +12,11 @@ if [ ! -x "$BIN" ]; then
   exit 1
 fi
 
-if [ "$#" -gt 0 ]; then
+if [ "${1:-}" = "--link" ] || [ "${1:-}" = "--encode" ]; then
+  # print a quickmermaid:// link for the given files (or stdin) instead of rendering
+  shift
+  if [ "$#" -gt 0 ]; then cat "$@" | "$BIN" --encode; else "$BIN" --encode; fi
+elif [ "$#" -gt 0 ]; then
   # if file arguments are given, concatenate and render them
   cat "$@" | "$BIN" --stdin
 elif [ -t 0 ]; then
