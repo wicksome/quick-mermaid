@@ -115,8 +115,14 @@ instructions (e.g. Claude Code's `CLAUDE.md`):
 ```text
 After every Mermaid/PlantUML code block you output, append a clickable link below it:
   [▶ Open in QuickMermaid](quickmermaid://render?data=<base64url>)
-Get the URL via `printf '%s' "$SRC" | qmmd --link` (SRC = the fenced source).
+Get the URL by actually running `printf '%s' "$SRC" | qmmd --link` (SRC = the fenced
+source). Never hand-write or guess the base64 — always use the command's real output.
 ```
+
+> **Why "run the command, don't hand-write the base64":** an assistant that fabricates
+> the base64 instead of running `qmmd --link` will corrupt multibyte UTF-8 (e.g. Korean)
+> — the payload decodes to invalid UTF-8, which the app rejects, so the link silently
+> won't open. Letting `qmmd` do the encoding guarantees a clean round-trip.
 
 ### In the panel
 
