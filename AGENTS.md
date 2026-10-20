@@ -19,8 +19,9 @@ update the spec and a test together.
 
 ## Core principles
 
-- **Zero third-party dependencies.** Native AppKit + WebKit only. Mermaid is
-  vendored at `Resources/mermaid.min.js`; the PlantUML engine is vendored at
+- **Zero third-party dependencies.** Native AppKit + WebKit only. Mermaid is rendered
+  by **pele** (MIT, obsidianmd/pele), vendored verbatim at `Resources/pele.global.js`
+  (its upstream IIFE browser build, ~680KB, exposes only the `pele` global); the PlantUML engine is vendored at
   `Resources/plantuml.js` (TeaVM build, ~7.6MB) + `Resources/viz-global.js`
   (Viz.js/Graphviz, ~1.4MB). Do not add SwiftPM/CocoaPods deps or load anything
   from the network at runtime. See "Vendoring the PlantUML engine" below before
@@ -52,8 +53,8 @@ update the spec and a test together.
     sharing, accounts): that belongs in a separate mode/app.
   - Perceptible launch/render latency or memory growth on the common path.
 
-  Reassess weight on every heavy addition. Current baseline: `.app` ~13MB, almost all
-  of it vendored JS (Mermaid ~3.2MB + the lazy-loaded PlantUML engine ~8.7MB); the
+  Reassess weight on every heavy addition. Current baseline: `.app` ~10MB, almost all
+  of it vendored JS (pele ~0.7MB + the lazy-loaded PlantUML engine ~8.7MB); the
   Swift binary is ~330KB.
 
 ## Build, run, verify
@@ -117,10 +118,15 @@ Run long/log-heavy builds via a subagent when possible to keep the main context 
   Swift confirms the action.
 - `window.exportData()` returns `{svg, w, h, bg}` for diagram-only PNG export.
 - `#preview` in the URL hash hides the toolbar (used by the Settings preview).
-- Mermaid runs with `suppressErrorRendering: true`; the app draws its own
-  empty/error states and `cleanupOrphans()` removes stray nodes Mermaid appends.
-  **Do not re-enable Mermaid's default error graphic** (it caused a persistent
-  "Syntax error" bomb overlay).
+- **Mermaid = pele.** `renderMermaidToString()` calls `pele.render()` (synchronous,
+  throws `PeleError` with the line on syntax errors); the app draws its own
+  empty/error states. pele colors via `--pele-*` CSS variables, not Mermaid themes:
+  `PELE_THEMES` maps the stored theme names (default/dark/forest/neutral/base) to
+  palettes, and `peleVars()` bakes them into the svg's own `style` so thumbnails and
+  PNG export stay themed — `svgPayload()` therefore strips only sizing props from the
+  style, never the whole attribute. Each render gets a unique `idPrefix` because the
+  main diagram and history thumbnails share one page.
+  To update pele: copy `dist/pele.global.js` from the `pele` npm tarball as-is.
 - **Engine routing + fence handling.** `window.render` runs `stripFence()` (strips a
   leading ` ```lang … ``` ` Markdown fence) then `detectEngine(lang, body)`: a
   ` ```puml `/` ```plantuml ` tag → PlantUML, ` ```mermaid ` → Mermaid, otherwise

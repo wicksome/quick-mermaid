@@ -25,13 +25,13 @@ Services, or pipe via CLI) → diagram. Think Quick Look, not Preview.app.
 - **Render from anywhere** — system Services menu, a global keyboard shortcut, or the `qmmd` CLI.
 - **Source priority** — uses the current selection; falls back to the clipboard; shows nothing if there is no renderable text.
 - **Zoom, pan & fit** — buttons, `⌘+ / ⌘− / ⌘0`, `⌘`+scroll, trackpad pinch; drag to pan; **fit-to-window** button or `Space` re-fits the diagram after you resize the window.
-- **Themes & background** — pick a Mermaid theme and a canvas background color.
+- **Themes & background** — pick a theme (default/dark/forest/neutral/base) and a canvas background color.
 - **Source view** — toggle the original source text with syntax highlighting; copy the **code** from here.
 - **PNG export** — copy (`⌘C`) or save (`⌘S`) the **diagram only** (no toolbar, full size even off-screen).
 - **Recent history** — recently rendered diagrams are kept with thumbnails; reopen one, **copy its image**, or delete it from the list.
 - **Shareable links** — copy a diagram as a `quickmermaid://` link (toolbar button or `qmmd --link`); clicking that link in any app renders the diagram.
 - **PlantUML too** — source that starts with `@startuml…@enduml` (and other `@start…` diagrams) is auto-detected and rendered by a vendored offline PlantUML engine. Mermaid stays the primary focus.
-- **Offline** — Mermaid and the PlantUML engine are vendored; no network required.
+- **Offline** — the Mermaid renderer ([pele](https://pele.run)) and the PlantUML engine are vendored; no network required.
 
 ## Install
 
@@ -156,7 +156,7 @@ conventions, and release process are in **[AGENTS.md](AGENTS.md)**.
 
 ## License
 
-[MIT](LICENSE). Bundled third-party engines (Mermaid, PlantUML, Viz.js/Graphviz,
+[MIT](LICENSE). Bundled third-party engines (pele, PlantUML, Viz.js/Graphviz,
 TeaVM, Expat) retain their own licenses — see
 [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md). PlantUML is multi-licensed and
 used here under its MIT option.
