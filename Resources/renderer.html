@@ -160,7 +160,7 @@
   }
   #toolbar button.done { background: #30d158; color: #fff; border-color: #30d158; }
 </style>
-<script src="mermaid.min.js"></script>
+<script src="pele.global.js"></script>
 </head>
 <body>
   <div id="toolbar">
@@ -204,7 +204,7 @@
     var sourceOpen = false;
     var historyOpen = false;
     var rendered = false;    // true only when a diagram is currently shown (not empty/error state)
-    var renderSeq = 0;       // unique mermaid render id counter (avoids id collisions on rapid renders)
+    var renderSeq = 0;       // unique svg id prefix counter (main diagram + thumbnails share the page, so ids must not collide)
     var historyItems = [];   // recent diagram sources (most recent first), injected by Swift
     var suppressKeyCopyUntil = 0;   // ignore keyboard ⌘C until this time (blocks the selection-grab ⌘C echo right after open)
     var activeEngine = 'mermaid';   // engine that drew the current diagram (drives source-view highlighting)
@@ -219,7 +219,7 @@
         reset: '초기화', source: '</> 소스', save: '이미지 저장', copy: '이미지 복사',
         emptyTitle: '표시할 다이어그램이 없어요', emptySub: '먼저 Mermaid 또는 PlantUML 텍스트를 선택(또는 복사)한 뒤 다시 시도하세요.',
         errTitle: '다이어그램을 그릴 수 없어요', errSub: '문법 오류로 보입니다. 상단 “소스” 버튼으로 원문을 확인하세요.',
-        loadFail: 'mermaid.js 로드 실패', loadFailSub: 'mermaid.min.js 를 찾지 못했습니다.',
+        loadFail: 'Mermaid 렌더러 로드 실패', loadFailSub: 'pele.global.js 를 찾지 못했습니다.',
         pumlLoadFail: 'PlantUML 엔진 로드 실패', pumlLoadFailSub: 'plantuml.js / viz-global.js 를 찾지 못했습니다.',
         pumlLoading: 'PlantUML 엔진 준비 중…', pumlLoadingSub: '처음 한 번 엔진을 불러오는 중입니다.',
         copied: '복사됨', saved: '저장됨', copyDone: '✓ 복사됨', linkCopied: '링크 복사됨',
@@ -233,7 +233,7 @@
         reset: 'Reset', source: '</> Source', save: 'Save PNG', copy: 'Copy PNG',
         emptyTitle: 'Nothing to render', emptySub: 'Select (or copy) some Mermaid or PlantUML text and try again.',
         errTitle: 'Could not render the diagram', errSub: 'Looks like a syntax error. Use the “Source” button above to inspect.',
-        loadFail: 'Failed to load mermaid.js', loadFailSub: 'mermaid.min.js was not found.',
+        loadFail: 'Failed to load the Mermaid renderer', loadFailSub: 'pele.global.js was not found.',
         pumlLoadFail: 'Failed to load the PlantUML engine', pumlLoadFailSub: 'plantuml.js / viz-global.js was not found.',
         pumlLoading: 'Preparing the PlantUML engine…', pumlLoadingSub: 'Loading the engine for the first time.',
         copied: 'Copied', saved: 'Saved', copyDone: '✓ Copied', linkCopied: 'Link copied',
@@ -314,7 +314,7 @@
       centerContent();
     }
 
-    // empty/error state view (we render this instead of mermaid's default error screen)
+    // empty/error state view (the app draws its own; engine errors only supply the detail text)
     function showState(glyph, title, subtitle, detail) {
       rendered = false;                          // no diagram → export disabled
       setMeta(null);                             // hide the engine/time readout
@@ -352,7 +352,7 @@
       el.classList.add('show');
     }
 
-    // clean up temporary/error nodes mermaid left in body (keep only #toolbar/#stage/#state/#source)
+    // clean up stray nodes an engine left in body (keep only #toolbar/#stage/#state/#source)
     function cleanupOrphans() {
       var keep = { 'toolbar': 1, 'stage': 1, 'state': 1, 'source': 1, 'history': 1, 'toast': 1 };
       Array.prototype.slice.call(document.body.children).forEach(function (el) {
@@ -403,6 +403,34 @@
         }
       }
       return code;
+    }
+
+    // ── Mermaid via pele ──
+    // pele renders Mermaid text to SVG synchronously and colors it through CSS
+    // variables (--pele-*), not Mermaid's theme engine. The theme setting keeps its
+    // Mermaid names (stored in UserDefaults) and maps each to a palette approximating
+    // that Mermaid theme; "base" uses pele's own built-in palette.
+    var PELE_THEMES = {
+      'default': { fg: '#333333', muted: '#555555', line: '#333333', surface: '#ECECFF', 'surface-alt': '#ffffde', border: '#9370DB', accent: '#9370DB' },
+      'dark':    { fg: '#e0e0e0', muted: '#a8a8a8', line: '#d3d3d3', surface: '#1f2020', 'surface-alt': '#2b2c2c', border: '#cccccc', accent: '#81B1DB' },
+      'forest':  { fg: '#000000', muted: '#333333', line: '#000000', surface: '#cde498', 'surface-alt': '#cdffb2', border: '#13540c', accent: '#6eaa49' },
+      'neutral': { fg: '#333333', muted: '#666666', line: '#666666', surface: '#eeeeee', 'surface-alt': '#f4f4f4', border: '#999999', accent: '#707070' },
+      'base':    {}
+    };
+    // The variables are baked into the svg's own style attribute (not page CSS) so the
+    // same string stays themed when reused as a thumbnail or rasterized for PNG export.
+    function peleVars(theme, bg) {
+      var p = PELE_THEMES[theme] || PELE_THEMES['default'], css = '--pele-bg:' + bg + ';';
+      for (var k in p) css += '--pele-' + k + ':' + p[k] + ';';
+      return css;
+    }
+    // Render Mermaid source to an svg string. Throws pele's PeleError (message carries
+    // the line/position for syntax errors) on unsupported or malformed input.
+    function renderMermaidToString(code) {
+      var opts = { idPrefix: 'p' + (++renderSeq) + '-', responsive: false, limit: 900000 };
+      if (currentFont && currentFont !== 'default') opts.fontFamily = currentFont;
+      var svg = pele.render(code, opts).svg;
+      return svg.replace(/^<svg([^>]*?) style="/, '<svg$1 style="' + peleVars(currentTheme, currentBg));
     }
 
     var pendingEngine = null;   // engine resolved by window.render (fence-aware); consumed once by doRender
@@ -526,25 +554,20 @@
       // is no longer what's about to be shown, so copy/save/meta must not point at it.
       rendered = false; setMeta(null); updateExportButtons();
       if (engine === 'plantuml') { return doRenderPlantUML(); }
-      if (!window.mermaid) { showState('⚠️', L.loadFail, L.loadFailSub); post(false, 'mermaid not loaded'); return; }
+      if (!window.pele) { showState('⚠️', L.loadFail, L.loadFailSub); post(false, 'pele not loaded'); return; }
       try {
-        var mmInit = { startOnLoad: false, theme: currentTheme, suppressErrorRendering: true, maxTextSize: 900000, maxEdges: 2000 };
-        if (currentFont && currentFont !== 'default') mmInit.fontFamily = currentFont;
-        mermaid.initialize(mmInit);
         var t0 = now();
-        var out = await mermaid.render('g' + (++renderSeq) + '_' + Date.now(), lastCode);
+        var svg = renderMermaidToString(lastCode);
         var dt = now() - t0;
         hideState();
-        document.getElementById('diagram').innerHTML = out.svg;
-        cleanupOrphans();
+        document.getElementById('diagram').innerHTML = svg;
         scale = fitScale() * baseZoom;   // open at a size that fits the render window
         centerContent();
         rendered = true;
         setMeta('mermaid', dt);
         if (typeof updateExportButtons === 'function') updateExportButtons();
-        post(true, 'svg length=' + out.svg.length);
+        post(true, 'svg length=' + svg.length);
       } catch (e) {
-        cleanupOrphans();
         var msg = (e && e.message) ? e.message : String(e);
         showState('🚫', L.errTitle, L.errSub, msg);
         post(false, msg);
@@ -576,7 +599,9 @@
       var clone = svg.cloneNode(true);
       clone.setAttribute('width', w);
       clone.setAttribute('height', h);
-      clone.removeAttribute('style'); // remove max-width etc. → natural size
+      // Drop only sizing props (→ natural size). The rest of the style must survive:
+      // pele's colors and font live there as CSS variables.
+      ['max-width', 'max-height', 'width', 'height'].forEach(function (p) { clone.style.removeProperty(p); });
       return JSON.stringify({ svg: new XMLSerializer().serializeToString(clone), w: w, h: h, bg: currentBg });
     }
     // Swift reads this to rasterize the diagram to PNG. `exportOverride`, when set, is
@@ -708,7 +733,7 @@
       var s = box.querySelector('svg');
       if (s) {
         // Scale the whole diagram to fit the small box (letterboxed via viewBox),
-        // overriding the width/height/max-width mermaid emits — otherwise the
+        // overriding the width/height/max-width the engine emits — otherwise the
         // natural-size svg overflows and the box just shows clipped whitespace.
         s.setAttribute('width', '100%');
         s.setAttribute('height', '100%');
@@ -718,7 +743,7 @@
       }
     }
     async function renderThumbnails(gen) {
-      if (!window.mermaid) return;
+      if (!window.pele) return;
       var boxes = document.getElementById('history').querySelectorAll('.thumb');
       for (var i = 0; i < boxes.length; i++) {
         if (gen !== thumbGen) return;   // a newer renderHistory() superseded us
@@ -747,15 +772,15 @@
           continue;
         }
         try {
-          var out = await mermaid.render('thumb' + (++thumbSeq) + '_' + Date.now(), code);
-          thumbCache[code] = out.svg;
-          if (gen === thumbGen) fillThumb(box, out.svg);
+          var tsvg = renderMermaidToString(code);
+          thumbCache[code] = tsvg;
+          if (gen === thumbGen) fillThumb(box, tsvg);
         } catch (e) {
           thumbCache[code] = '';
           if (gen === thumbGen) setThumbPlaceholder(box, '⚠');
         }
       }
-      cleanupOrphans();   // drop any temp nodes mermaid appended to <body>
+      cleanupOrphans();   // drop any temp nodes an engine appended to <body>
     }
     function deleteHistory(i) {
       if (i < 0 || i >= historyItems.length) return;
@@ -798,7 +823,7 @@
       if (!svg) {
         try {
           if (itemEngine(it) === 'plantuml') { await ensurePlantUML(); svg = await renderPlantUMLToString(code); }
-          else { var out = await mermaid.render('hc' + (++thumbSeq) + '_' + Date.now(), code); svg = out.svg; cleanupOrphans(); }
+          else svg = renderMermaidToString(code);
           if (svg) thumbCache[code] = svg;
         } catch (e) { svg = ''; }
       }
@@ -937,6 +962,23 @@
       ok('meta.mermaid', $('meta').classList.contains('show')
         && $('meta').querySelector('.eng').textContent === 'Mermaid'
         && /\d/.test($('meta').querySelector('.ms').textContent));
+
+      // Mermaid is drawn by pele: the theme setting becomes --pele-* variables baked into
+      // the svg itself, so they survive PNG export (which serializes the svg out of the page)
+      window.render('graph TD\n  A-->B', 'dark', 100, '#123456', 'en');
+      await new Promise(function (r) { setTimeout(r, 100); });
+      var themedStyle = ($('diagram').querySelector('svg') || { getAttribute: function () { return ''; } }).getAttribute('style') || '';
+      ok('pele.theme.vars', themedStyle.indexOf('--pele-surface:#1f2020') !== -1 && themedStyle.indexOf('--pele-bg:#123456') !== -1);
+      var themedPd = window.exportData();
+      ok('pele.export.keepsVars', !!themedPd && JSON.parse(themedPd).svg.indexOf('--pele-surface:#1f2020') !== -1
+        && JSON.parse(themedPd).svg.indexOf('max-width') === -1);
+      // a syntax error reports where it is (pele's message carries the line)
+      lastCode = 'flowchart TD\n  A-->'; await doRender();
+      ok('pele.error.line', $('state').style.display === 'flex' && /line \d+/.test($('state').querySelector('.detail').textContent));
+      // newer diagram types render (the previous mermaid.js bundle had no architecture/packet)
+      lastCode = 'packet\n  0-15: "Source Port"\n  16-31: "Destination Port"'; await doRender();
+      ok('pele.newType.packet', $('diagram').querySelectorAll('svg').length === 1 && rendered === true);
+      currentTheme = 'default'; currentBg = '#ffffff';
 
       // engine detection: @start… routes to PlantUML, everything else to Mermaid
       ok('puml.detect', isPlantUML('@startuml\nA->B\n@enduml') === true
@@ -1094,8 +1136,10 @@
       await new Promise(function (r) { setTimeout(r, 300); });
       ok('render.closesOverlay', $('history').style.display === 'none' && $('state').style.display !== 'flex');
 
-      // in-flight render gates exports: rendered is false (copy disabled) until it lands
-      lastCode = 'graph TD\n  A-->B'; pendingEngine = null;
+      // in-flight render gates exports: rendered is false (copy disabled) until it lands.
+      // Uses PlantUML because it renders asynchronously; pele draws Mermaid synchronously,
+      // so a Mermaid render has no in-flight window to observe.
+      lastCode = '@startuml\nclass A\nclass B\nA --> B\n@enduml'; pendingEngine = null;
       var rp = doRender();
       ok('render.inflight.gated', rendered === false && $('copyBtn').disabled === true);
       await rp;

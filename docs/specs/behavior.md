@@ -27,7 +27,12 @@ Scope: what happens once source text is being rendered/viewed. How text gets in
   class diagrams) render to a diagram.
 - While a render is in progress, the previous diagram is not treated as the current
   one (see "must never").
-- Invalid source shows an error state; empty source shows an empty state.
+- Mermaid is drawn by the vendored **pele** renderer (Mermaid syntax, pele's own layout
+  and style), not mermaid.js.
+- Invalid source shows an error state; empty source shows an empty state. A Mermaid
+  syntax error's detail names the line it was found on.
+- The theme setting (default/dark/forest/neutral/base) colors Mermaid diagrams through a
+  palette approximating that Mermaid theme ("base" = pele's own palette).
 - The toolbar shows which engine drew the current diagram and how long it took.
 
 ### Source view
@@ -66,7 +71,7 @@ Scope: what happens once source text is being rendered/viewed. How text gets in
 
 ### Font
 - When a font family is configured (not "default"), diagram text renders in that font:
-  Mermaid via its `fontFamily` config, PlantUML via an injected `skinparam defaultFontName`.
+  Mermaid via pele's `fontFamily` option, PlantUML via an injected `skinparam defaultFontName`.
 - "default" leaves each engine's built-in font — behavior identical to no setting.
 - Only installed system fonts are selectable; a value that isn't installed falls back to "default".
 
@@ -87,6 +92,8 @@ Scope: what happens once source text is being rendered/viewed. How text gets in
   as the wrong engine,** from history.
 - **The engine/time readout must never be shown when no diagram is on screen** (empty,
   error, or while an overlay covers the diagram).
+- **An exported (copied/saved) image must never lose the diagram's theme colors or font**
+  — it must look like the on-screen diagram, not pele's unthemed fallback.
 - **Copying in the source view must never put an image on the clipboard** (it must be
   the text); copying in the diagram view must never put text instead of the image.
 - **Opening history must never pull in the heavy PlantUML engine** just to draw a

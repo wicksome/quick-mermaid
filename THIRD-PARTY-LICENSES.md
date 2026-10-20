@@ -6,10 +6,10 @@ component is loaded from the network at runtime.
 
 ---
 
-## Mermaid — `Resources/mermaid.min.js`
+## Pele (Mermaid renderer) — `Resources/pele.global.js`
 
-MIT License — Copyright (c) 2014–present Knut Sveidqvist
-<https://github.com/mermaid-js/mermaid>
+MIT License — Copyright (c) 2026 kepano
+<https://github.com/obsidianmd/pele> (vendored unmodified from the `pele` npm package)
 
 ---
 
