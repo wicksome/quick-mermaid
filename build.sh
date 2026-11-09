@@ -31,6 +31,9 @@ cp Resources/plantuml.js "$APP_PATH/Contents/Resources/"
 cp Resources/viz-global.js "$APP_PATH/Contents/Resources/"
 cp THIRD-PARTY-LICENSES.md "$APP_PATH/Contents/Resources/"
 [ -f Resources/AppIcon.icns ] && cp Resources/AppIcon.icns "$APP_PATH/Contents/Resources/"
+# Ship the CLI inside the bundle so a dmg / Homebrew cask install can link it onto PATH.
+cp qmmd "$APP_PATH/Contents/Resources/qmmd"
+chmod +x "$APP_PATH/Contents/Resources/qmmd"
 
 echo "==> ad-hoc codesign"
 codesign --force --deep --sign - "$APP_PATH" >/dev/null 2>&1 || echo "   (codesign skipped)"
