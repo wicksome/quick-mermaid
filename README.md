@@ -35,7 +35,15 @@ Services, or pipe via CLI) → diagram. Think Quick Look, not Preview.app.
 
 ## Install
 
-Download the latest `QuickMermaid-x.y.z.dmg` from
+With Homebrew (installs the app and puts `qmmd` on PATH):
+
+```bash
+brew tap wicksome/tap
+brew trust wicksome/tap          # Homebrew 7+ loads only trusted third-party taps
+brew install --cask quick-mermaid
+```
+
+Or download the latest `QuickMermaid-x.y.z.dmg` from
 [Releases](https://github.com/wicksome/quick-mermaid/releases), open it, and drag
 **QuickMermaid.app** to `/Applications`.
 
