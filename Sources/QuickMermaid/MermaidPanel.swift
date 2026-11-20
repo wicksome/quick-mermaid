@@ -2,10 +2,21 @@ import AppKit
 import WebKit
 import UniformTypeIdentifiers
 
-/// A floating panel that can become key and is closed by Esc (`cancelOperation`).
+/// A floating panel that can become key and is closed by Esc (`cancelOperation`) or ⌘W.
 final class QuickPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override func cancelOperation(_ sender: Any?) { close() }
+
+    /// ⌘W normally reaches a window through the main menu's File ▸ Close item. This
+    /// menu-bar-only (`.accessory`) app has no main menu, so the panel handles it itself.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if mods == .command, event.charactersIgnoringModifiers?.lowercased() == "w" {
+            close()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 }
 
 /// JS → Swift message channels. Names must match `webkit.messageHandlers.*` in renderer.html.

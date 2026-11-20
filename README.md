@@ -151,7 +151,7 @@ double-clicking one in Finder (or *Open With → QuickMermaid*, or
 - **Copy PNG / `⌘C`**, **Save PNG / `⌘S`**: export the diagram only.
 - **Copy as link** (chain icon): copy a `quickmermaid://` link carrying the source — available in the diagram and source views.
 - **History**: hover a recent-diagram row to **copy its image** or delete it; click it to reopen.
-- **Esc** or click outside to close (configurable in Settings).
+- **Esc** / **⌘W** or click outside to close (configurable in Settings).
 
 ### Settings
 
