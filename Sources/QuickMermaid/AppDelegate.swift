@@ -8,7 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var services: ServicesProvider?
     private let settings = SettingsWindowController()
     private let hotkey = HotkeyManager()
-    /// Set when a quickmermaid:// URL is opened during launch, so the cold-launch
+    /// Set when a quickmermaid:// URL or a diagram file is opened during launch, so the cold-launch
     /// Settings window (which would otherwise pop in front of the rendered diagram)
     /// is suppressed. See `application(_:open:)`.
     private var didOpenURLOnLaunch = false
@@ -64,15 +64,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    // MARK: - URL scheme (quickmermaid://)
+    // MARK: - Opened URLs (quickmermaid:// links, .mmd / .mermaid files)
 
-    /// LaunchServices delivers clicked `quickmermaid://render?data=…` links here
-    /// (cold launch → after didFinishLaunching; running app → routed to this instance).
-    /// The decoded source renders just like any other input source.
+    /// LaunchServices delivers clicked `quickmermaid://render?data=…` links and
+    /// opened `.mmd` / `.mermaid` files (Finder double-click, Open With, `open -a`)
+    /// here (cold launch → after didFinishLaunching; running app → routed to this
+    /// instance). The source renders just like any other input source.
     func application(_ application: NSApplication, open urls: [URL]) {
         guard case .service = mode else { return }
         for url in urls {
-            guard let code = URLScheme.decode(url: url),
+            let source = url.isFileURL
+                ? try? String(contentsOf: url, encoding: .utf8)
+                : URLScheme.decode(url: url)
+            guard let code = source,
                   !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
             didOpenURLOnLaunch = true
             panel.show(code: code)

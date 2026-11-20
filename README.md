@@ -29,6 +29,7 @@ Services, or pipe via CLI) → diagram. Think Quick Look, not Preview.app.
 - **Source view** — toggle the original source text with syntax highlighting; copy the **code** from here.
 - **PNG export** — copy (`⌘C`) or save (`⌘S`) the **diagram only** (no toolbar, full size even off-screen).
 - **Recent history** — recently rendered diagrams are kept with thumbnails; reopen one, **copy its image**, or delete it from the list.
+- **Open files** — double-click a `.mmd` / `.mermaid` file in Finder (or *Open With → QuickMermaid*) to render it.
 - **Shareable links** — copy a diagram as a `quickmermaid://` link (toolbar button or `qmmd --link`); clicking that link in any app renders the diagram.
 - **PlantUML too** — source that starts with `@startuml…@enduml` (and other `@start…` diagrams) is auto-detected and rendered by a vendored offline PlantUML engine. Mermaid stays the primary focus.
 - **Offline** — the Mermaid renderer ([pele](https://pele.run)) and the PlantUML engine are vendored; no network required.
@@ -131,6 +132,16 @@ source). Never hand-write or guess the base64 — always use the command's real 
 > the base64 instead of running `qmmd --link` will corrupt multibyte UTF-8 (e.g. Korean)
 > — the payload decodes to invalid UTF-8, which the app rejects, so the link silently
 > won't open. Letting `qmmd` do the encoding guarantees a clean round-trip.
+
+### E) Open `.mmd` / `.mermaid` files
+
+QuickMermaid registers itself as a viewer for `.mmd` and `.mermaid` files, so
+double-clicking one in Finder (or *Open With → QuickMermaid*, or
+`open flow.mmd`) renders it in the panel.
+
+> `.mmd` is also used by other formats (e.g. MultiMarkdown). If another app
+> already owns `.mmd` on your Mac, pick QuickMermaid once via *Get Info → Open
+> with → Change All…*.
 
 ### In the panel
 

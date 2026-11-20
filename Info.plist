@@ -58,5 +58,44 @@
             </array>
         </dict>
     </array>
+    <!-- Mermaid source files (.mmd / .mermaid). There is no system UTI for them,
+         so declare one as *imported* (we don't own the format): if another app
+         declares the same extensions, LaunchServices merges rather than fights. -->
+    <key>UTImportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>me.wickso.quickmermaid.mermaid-source</string>
+            <key>UTTypeDescription</key>
+            <string>Mermaid Diagram</string>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.plain-text</string>
+            </array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>mmd</string>
+                    <string>mermaid</string>
+                </array>
+            </dict>
+        </dict>
+    </array>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Mermaid Diagram</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Default</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>me.wickso.quickmermaid.mermaid-source</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>
