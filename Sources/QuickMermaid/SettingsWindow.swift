@@ -70,10 +70,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
     /// Called when the window is closed (e.g., quit the app in CLI --settings mode). Ignored if nil.
     var onClose: (() -> Void)?
 
-    private static var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
-    }
-
     private static let sample = """
     graph LR
       A[Start] --> B{OK?}
@@ -313,12 +309,14 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
         launchAtLoginCheck.title = L10n.t("settings.launchAtLogin")
         shortcutCheck.title = L10n.t("settings.shortcut")
         keepOpenCheck.title = L10n.t("settings.keepOpen")
-        versionLabel.stringValue = "\(L10n.t("settings.version")) \(Self.appVersion)"
+        versionLabel.stringValue = "\(L10n.t("settings.version")) \(AppInfo.displayVersion)"
         releasesButton.title = L10n.t("settings.openReleases")
         applyUpdateStatus()
     }
 
     private func applyUpdateStatus() {
+        // A dev build doesn't check for updates (see checkForUpdate), so it can't claim "up to date".
+        updateStatusLabel.isHidden = AppInfo.isDevBuild
         if let v = knownNewer {
             updateStatusLabel.stringValue = "\(L10n.t("settings.updateAvailable")): v\(v)"
             updateStatusLabel.textColor = .systemBlue
@@ -329,7 +327,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, WKNavigationDe
     }
 
     private func checkForUpdate() {
-        UpdateCheck.checkNewer(than: Self.appVersion) { [weak self] newer in
+        guard !AppInfo.isDevBuild else { return }
+        UpdateCheck.checkNewer(than: AppInfo.version) { [weak self] newer in
             self?.knownNewer = newer
             self?.applyUpdateStatus()
         }

@@ -95,6 +95,7 @@ Run long/log-heavy builds via a subagent when possible to keep the main context 
 |------|----------------|
 | `Sources/QuickMermaid/main.swift` | Entry; mode dispatch via args (`--stdin`, `--settings`, `--selftest`, `--test`, `--encode`, else service) |
 | `AppDelegate.swift` | Menu-bar item, Services registration, CLI/Settings modes, `quickmermaid://` URL handler, global hotkey wiring + Accessibility prompt |
+| `AppInfo.swift` | App name/version for display; dev-build detection (`0.0.0` = version never injected) + `QMBuildCommit` stamped by `build.sh` |
 | `URLScheme.swift` | `quickmermaid://render?data=<base64url>` encode/decode (pure; clickable diagram links + `--encode`) |
 | `ServicesProvider.swift` | `@objc renderMermaid` Services handler |
 | `MermaidPanel.swift` | Floating `NSPanel` + `WKWebView`; render injection; PNG copy/save via offscreen SVG render |

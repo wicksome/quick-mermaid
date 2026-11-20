@@ -25,6 +25,13 @@ rm -rf "$APP_PATH"
 mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
 cp "$BIN" "$APP_PATH/Contents/MacOS/$APP_NAME"
 cp Info.plist "$APP_PATH/Contents/Info.plist"
+# A build without an injected version (plain local ./build.sh) is a dev build:
+# stamp the source commit so the running copy shows which code it came from.
+if [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Info.plist)" = "0.0.0" ]; then
+  COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  git diff --quiet HEAD -- 2>/dev/null || COMMIT="$COMMIT-dirty"
+  /usr/libexec/PlistBuddy -c "Add :QMBuildCommit string $COMMIT" "$APP_PATH/Contents/Info.plist"
+fi
 cp Resources/renderer.html "$APP_PATH/Contents/Resources/"
 cp Resources/pele.global.js "$APP_PATH/Contents/Resources/"
 cp Resources/plantuml.js "$APP_PATH/Contents/Resources/"

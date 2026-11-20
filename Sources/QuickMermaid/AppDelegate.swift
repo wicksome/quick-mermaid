@@ -83,13 +83,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private static var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
-    }
-
     /// Check GitHub Releases on launch; if a newer version exists, surface it in the menu.
+    /// Skipped for dev builds: their `0.0.0` placeholder is always "older" than any release.
     private func checkForUpdate() {
-        UpdateCheck.checkNewer(than: Self.appVersion) { [weak self] newer in
+        guard !AppInfo.isDevBuild else { return }
+        UpdateCheck.checkNewer(than: AppInfo.version) { [weak self] newer in
             guard let self, let newer, let menu = self.statusItem?.menu else { return }
             let title = "\(L10n.t("menu.updateAvailable")) (v\(newer))"
             let item = NSMenuItem(title: title, action: #selector(self.openReleases), keyEquivalent: "")
@@ -110,14 +108,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let image = NSImage(systemSymbolName: "chart.bar.doc.horizontal", accessibilityDescription: "QuickMermaid") {
+        if let image = NSImage(systemSymbolName: "chart.bar.doc.horizontal", accessibilityDescription: AppInfo.name) {
             image.isTemplate = true
             item.button?.image = image
         } else {
             item.button?.title = "M"
         }
+        // Tag a dev build next to the icon so it can't be mistaken for the released app.
+        if AppInfo.isDevBuild {
+            item.button?.imagePosition = .imageLeading
+            item.button?.title = L10n.t("statusBar.dev")
+        }
         let menu = NSMenu()
-        menu.addItem(withTitle: "QuickMermaid", action: nil, keyEquivalent: "")
+        menu.addItem(withTitle: AppInfo.displayName, action: nil, keyEquivalent: "")
         menu.addItem(.separator())
         let settingsItem = NSMenuItem(title: L10n.t("menu.settings"), action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self

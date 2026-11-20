@@ -9,6 +9,8 @@ enum L10n {
         "menu.settings":     ["ko": "설정…",                          "en": "Settings…"],
         "menu.quit":         ["ko": "종료",                           "en": "Quit"],
         "menu.updateAvailable": ["ko": "업데이트 있음",               "en": "Update available"],
+        "app.devBuild":      ["ko": "테스트 빌드",                    "en": "Dev build"],
+        "statusBar.dev":     ["ko": "테스트",                         "en": "DEV"],
         "settings.secGeneral": ["ko": "일반",                         "en": "General"],
         "settings.secAppearance": ["ko": "모양",                      "en": "Appearance"],
         "settings.secShortcut": ["ko": "단축키",                      "en": "Shortcut"],
